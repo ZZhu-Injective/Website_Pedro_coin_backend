@@ -80,10 +80,21 @@ class InjectiveTokenInfo:
             }
 
         return circulation_supplies
+    
+"""
+{'factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm': {'info': {'denom': 'factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm', 'Total_supply': '1.0', 'Burn_supply': '0', 'Circulation_supply': '1.0'}}, 
+'factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8': {'info': {'denom': 'factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8', 'Total_supply': '212866389.2443389', 'Burn_supply': '0', 'Circulation_supply': '212866389.2443389'}}, 
+'factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt': {'info': {'denom': 'factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt', 'Total_supply': '777777777.0', 'Burn_supply': '177686522.0', 'Circulation_supply': '600091255.0'}}, 
+'factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck': {'info': {'denom': 'factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck', 'Total_supply': '93710392.00990751', 'Burn_supply': '0', 'Circulation_supply': '93710392.00990751'}}, 
+'factory/inj1td7t8spd4k6uev6uunu40qvrrcwhr756d5qw59/ipepe': {'info': {'denom': 'factory/inj1td7t8spd4k6uev6uunu40qvrrcwhr756d5qw59/ipepe', 'Total_supply': '50000000.0', 'Burn_supply': '0', 'Circulation_supply': '50000000.0'}}, 
+'factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi': {'info': {'denom': 'factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi', 'Total_supply': '15400.0', 'Burn_supply': '3000.000391', 'Circulation_supply': '12399.999609'}}, 
+'factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS': {'info': {'denom': 'factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS', 'Total_supply': '385887284.0', 'Burn_supply': '0', 'Circulation_supply': '385887284.0'}}, 
+'factory/inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm/SAI': {'info': {'denom': 'factory/inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm/SAI', 'Total_supply': '1000000.0', 'Burn_supply': '1.0', 'Circulation_supply': '999999.0'}}}
+"""
 
-async def main():
-    injective_token_info = InjectiveTokenInfo()
-    circulation_supplies = await injective_token_info.circulation_supply()
-    print(circulation_supplies)
+#async def main():
+#    injective_token_info = InjectiveTokenInfo()
+#    circulation_supplies = await injective_token_info.circulation_supply()
+#    print(circulation_supplies)
 
-asyncio.run(main())
+#asyncio.run(main())
