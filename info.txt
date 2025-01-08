@@ -1,0 +1,6 @@
+Myproject (pedroproject directory is the main container for your Django project). 
+    Contains the overall settings and configurations for the entire project.
+Myapp is an application within Django project. Apps are individual components that handle specific functions or features.
+    contains the specific components and functionality for a particular features or module within the project.
+
+
