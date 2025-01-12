@@ -1,5 +1,3 @@
-import django
-import os
 import asyncio
 import pandas as pd
 import base64
@@ -10,11 +8,6 @@ from pyinjective.client.model.pagination import PaginationOption
 from pyinjective.async_client import AsyncClient
 from pyinjective.core.network import Network
 from grpc import aio, StatusCode
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'myproject.settings')
-django.setup()
-
-from myapp.models import TokenHolder
 
 class InjectiveHolders:
 
@@ -114,7 +107,10 @@ class InjectiveHolders:
 
                 fetch_info = await self.client.fetch_denom_metadata(denom=native_address)
 
-                amount_Coin = int(amount_Coin) / 10 ** fetch_info['metadata']['decimals']
+                if fetch_info['metadata']['decimals'] == 0:
+                    amount_Coin = int(amount_Coin) / 10 ** 18
+                else:
+                    amount_Coin = int(amount_Coin) / 10 ** fetch_info['metadata']['decimals']
 
                 if amount_Coin == 0:
                     continue
@@ -132,34 +128,44 @@ class InjectiveHolders:
         return df_holders_native_coins
 
     async def fetch_holders(self, cw20_address, native_address):
+        print(cw20_address)
+
         df_holders_native =  await self.fetch_holder_native_token(native_address)
         df_holders_cw20 = await self.fetch_holders_cw20(cw20_address)
 
+        # Rename the columns to distinguish between native and CW20 values
         df_holders_cw20.rename(columns={'value': 'cw20_value'}, inplace=True)
         df_holders_native.rename(columns={'value': 'native_value'}, inplace=True)
 
+        # Merge the two dataframes on the 'key' column
         merged_df = pd.merge(df_holders_native, df_holders_cw20, on='key', how='outer')
 
+        # Fill NaN values with 0
         merged_df.fillna(0, inplace=True)
 
+        # Calculate the total value
         merged_df['total_value'] = merged_df['native_value'] + merged_df['cw20_value']
 
+        # Calculate the percentage of each holder's total value
         total_supply = merged_df['total_value'].sum()
         merged_df['percentage'] = (merged_df['total_value'] / total_supply) * 100
 
-        # Save to database
-        self.save_to_db(merged_df)
+        # Sort the merged dataframe by 'total_value' from high to low
+        merged_df = merged_df.sort_values(by='total_value', ascending=False)
 
+        # Round the values to two decimal places
+        merged_df = merged_df.round({'total_value': 2, 'percentage': 2, 'native_value': 2, 'cw20_value': 2})
+
+        # Add an ID column for the top holders starting from 1
+        merged_df = merged_df.reset_index(drop=True)
+        merged_df['Top'] = merged_df.index + 1
+
+        # Print the merged dataframe
         print(merged_df)
 
-    def save_to_db(self, df):
-        for _, row in df.iterrows():
-            TokenHolder.objects.update_or_create(
-                key=row['key'],
-                defaults={
-                    'native_value': row['native_value'],
-                    'cw20_value': row['cw20_value'],
-                    'total_value': row['total_value'],
-                    'percentage': row['percentage'],
-                }
-            )
+        # Create a dictionary from the merged dataframe
+        dict_holders = merged_df.to_dict('records')
+
+        print(dict_holders)
+
+        return dict_holders

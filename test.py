@@ -1,161 +1,78 @@
 import asyncio
-import pandas as pd
-import base64
-import json
-import time
+from typing import Any, Dict
 
-from pyinjective.client.model.pagination import PaginationOption
+from grpc import RpcError
+
 from pyinjective.async_client import AsyncClient
+from pyinjective.composer import Composer
 from pyinjective.core.network import Network
-from grpc import aio, StatusCode
-
-class InjectiveHolders:
-
-    def __init__(self):
-        self.network = Network.mainnet()
-        self.client = AsyncClient(self.network)
-
-    async def fetch_holders_cw20(self, cw20_address):
-        retry_attempts = 5
-        holders = None
-
-        for attempt in range(retry_attempts):
-            try:
-                holders = await self.client.fetch_all_contracts_state(address=cw20_address, pagination=PaginationOption(limit=1000))
-                break
-            except aio.AioRpcError as e:
-                if e.code() == StatusCode.UNAVAILABLE and attempt < retry_attempts - 1:
-                    wait_time = 2 ** attempt
-                    print(f"Retrying in {wait_time} seconds...")
-                    time.sleep(wait_time)
-                else:
-                    raise
-
-        if holders is None:
-            print("Failed to fetch holders after multiple attempts")
-            return
-
-        A = holders
-        while holders['pagination']['nextKey']:
-            pagination = PaginationOption(limit=1000, encoded_page_key=holders['pagination']['nextKey'])
-            holders = await self.client.fetch_all_contracts_state(address=cw20_address, pagination=pagination)
-            A['models'] += holders['models']
-            A['pagination'] = holders['pagination']
-
-        data_wallet = []
-
-        for model in A['models']:
-            try:
-                amount_Coin = base64.b64decode(model['value']).decode('utf-8')
-                inj_address = base64.b64decode(model['key']).decode('utf-8')
-
-                inj_address = inj_address[9:]
-
-                amount_Coin = amount_Coin.strip('"')
-
-                amount_Coin = int(amount_Coin) / 1000000000000000000
-
-                if amount_Coin == 0:
-                    continue
-
-                data_wallet.append({'key': inj_address, 'value': amount_Coin})
-
-            except (ValueError, json.JSONDecodeError) as e:
-                continue
-
-        df_holders_cw20 = pd.DataFrame(data_wallet)
-        wallet_count = df_holders_cw20.shape[0]
-        print(df_holders_cw20)
-        print(f"Total number of wallets: {wallet_count}")
-
-        return df_holders_cw20
 
 
-    async def fetch_holder_native_token(self, native_address):
-        retry_attempts = 5
-        holders = None
-
-        for attempt in range(retry_attempts):
-            try:
-                holders = await self.client.fetch_denom_owners(denom=native_address, pagination=PaginationOption(limit=1000))
-                break
-            except aio.AioRpcError as e:
-                if e.code() == StatusCode.UNAVAILABLE and attempt < retry_attempts - 1:
-                    wait_time = 2 ** attempt
-                    print(f"Retrying in {wait_time} seconds...")
-                    time.sleep(wait_time)
-                else:
-                    raise
-
-        if holders is None:
-            print("Failed to fetch holders after multiple attempts")
-            return
-
-        B = holders
-        while holders['pagination']['nextKey']:
-            pagination = PaginationOption(limit=1000, encoded_page_key=holders['pagination']['nextKey'])
-            holders = await self.client.fetch_denom_owners(denom=native_address, pagination=pagination)
-            B['denomOwners'] += holders['denomOwners']
-            B['pagination'] = holders['pagination']
-
-        data_wallet = []
-
-        for model in B['denomOwners']:
-            try:
-                amount_Coin = model['balance']['amount']
-                inj_address = model['address']
-
-                fetch_info = await self.client.fetch_denom_metadata(denom=native_address)
-
-                amount_Coin = int(amount_Coin) / 10 ** fetch_info['metadata']['decimals']
-
-                if amount_Coin == 0:
-                    continue
-
-                data_wallet.append({'key': inj_address, 'value': amount_Coin})
-
-            except (ValueError, json.JSONDecodeError) as e:
-                continue
-
-        df_holders_native_coins = pd.DataFrame(data_wallet)
-        wallet_count = df_holders_native_coins.shape[0]
-        print(df_holders_native_coins)
-        print(f"Total number of wallets: {wallet_count}")
-
-        return df_holders_native_coins
-
-    async def fetch_holders(self, cw20_address, native_address):
-        df_holders_native =  await self.fetch_holder_native_token(native_address)
-        df_holders_cw20 = await self.fetch_holders_cw20(cw20_address)
-
-        # Rename the columns to distinguish between native and CW20 values
-        df_holders_cw20.rename(columns={'value': 'cw20_value'}, inplace=True)
-        df_holders_native.rename(columns={'value': 'native_value'}, inplace=True)
-
-        # Merge the two dataframes on the 'key' column
-        merged_df = pd.merge(df_holders_native, df_holders_cw20, on='key', how='outer')
-
-        # Fill NaN values with 0
-        merged_df.fillna(0, inplace=True)
-
-        # Calculate the total value
-        merged_df['total_value'] = merged_df['native_value'] + merged_df['cw20_value']
-
-        # Calculate the percentage of each holder's total value
-        total_supply = merged_df['total_value'].sum()
-        merged_df['percentage'] = (merged_df['total_value'] / total_supply) * 100
-
-        # Print the merged dataframe
-        print(merged_df)
+async def chain_stream_event_processor(event: Dict[str, Any]):
+    print(event)
 
 
-async def main():
-    injective_holders = InjectiveHolders()
-    
-    # Provide actual addresses for native and CW20 tokens
-    native_address = "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm"
-    cw20_address = "inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm"
-    
-    await injective_holders.fetch_holders(cw20_address, native_address)
+def stream_error_processor(exception: RpcError):
+    print(f"There was an error listening to chain stream updates ({exception})")
 
-asyncio.run(main())
+
+def stream_closed_processor():
+    print("The chain stream updates stream has been closed")
+
+
+async def main() -> None:
+    network = Network.mainnet()
+
+    client = AsyncClient(network)
+    composer = Composer(network=network.string())
+
+    subaccount_id = "0xbdaedec95d563fb05240d6e01821008454c24c36000000000000000000000000"
+
+    inj_usdt_market = "0x0611780ba69656949525013d947713300f56c37b6175e02f26bffa495c3208fe"
+    inj_usdt_perp_market = "0x17ef48032cb24375ba7c2e39f384e56433bcab20cbee9a7357e4cba2eb00abe6"
+
+    bank_balances_filter = composer.chain_stream_bank_balances_filter(
+        accounts=["inj1hkhdaj2a2clmq5jq6mspsggqs32vynpk228q3r"]
+    )
+    subaccount_deposits_filter = composer.chain_stream_subaccount_deposits_filter(subaccount_ids=[subaccount_id])
+    spot_trades_filter = composer.chain_stream_trades_filter(subaccount_ids=["*"], market_ids=[inj_usdt_market])
+    derivative_trades_filter = composer.chain_stream_trades_filter(
+        subaccount_ids=["*"], market_ids=[inj_usdt_perp_market]
+    )
+    spot_orders_filter = composer.chain_stream_orders_filter(
+        subaccount_ids=[subaccount_id], market_ids=[inj_usdt_market]
+    )
+    derivative_orders_filter = composer.chain_stream_orders_filter(
+        subaccount_ids=[subaccount_id], market_ids=[inj_usdt_perp_market]
+    )
+    spot_orderbooks_filter = composer.chain_stream_orderbooks_filter(market_ids=[inj_usdt_market])
+    derivative_orderbooks_filter = composer.chain_stream_orderbooks_filter(market_ids=[inj_usdt_perp_market])
+    positions_filter = composer.chain_stream_positions_filter(
+        subaccount_ids=[subaccount_id], market_ids=[inj_usdt_perp_market]
+    )
+    oracle_price_filter = composer.chain_stream_oracle_price_filter(symbols=["INJ", "USDT"])
+
+    task = asyncio.get_event_loop().create_task(
+        client.listen_chain_stream_updates(
+            callback=chain_stream_event_processor,
+            on_end_callback=stream_closed_processor,
+            on_status_callback=stream_error_processor,
+            bank_balances_filter=bank_balances_filter,
+            subaccount_deposits_filter=subaccount_deposits_filter,
+            spot_trades_filter=spot_trades_filter,
+            derivative_trades_filter=derivative_trades_filter,
+            spot_orders_filter=spot_orders_filter,
+            derivative_orders_filter=derivative_orders_filter,
+            spot_orderbooks_filter=spot_orderbooks_filter,
+            derivative_orderbooks_filter=derivative_orderbooks_filter,
+            positions_filter=positions_filter,
+            oracle_price_filter=oracle_price_filter,
+        )
+    )
+
+    await asyncio.sleep(delay=60)
+    task.cancel()
+
+
+if __name__ == "__main__":
+    asyncio.get_event_loop().run_until_complete(main())
