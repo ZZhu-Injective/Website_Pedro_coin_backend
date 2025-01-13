@@ -8,6 +8,5 @@ def save_addresses(request):
         print(request)
         data = json.loads(request.body)
         addresses = data.get('addresses', [])
-        # Process and save the addresses as needed
         return JsonResponse({'status': 'success', 'addresses': addresses})
     return JsonResponse({'error': 'Invalid request'}, status=400)
