@@ -1,182 +1,199 @@
-import pandas as pd
+import asyncio
+import base64
+import aiohttp
 from datetime import datetime
-
 from pyinjective.client.model.pagination import PaginationOption
 from pyinjective.async_client import AsyncClient
 from pyinjective.core.network import Network
-import aiohttp
 
 class InjectiveTokenInfo:
 
-    NATIVE = [
-        "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
-        "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
-        "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt",
-        "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
-        "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA",
-        "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS",
-        "factory/inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm/SAI"
-    ]
+    memecoin = [
+        {
+            "name": "Pedro",
+            "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
+            "cw20": "inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
+            "denom": "inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
+            "pool": "inj15ckgh6kdqg0x5p7curamjvqrsdw4cdzz5ky9v6",
+            "creator": "inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk",
+            "decimal": 18,
+        },
+        {
+            "name": "Shroom",
+            "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
+            "cw20": "inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
+            "denom": "inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
+            "pool": "inj1m35kyjuegq7ruwgx787xm53e5wfwu6n5uadurl",
+            "creator": "inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk",
+            "decimal": 18,
 
-    SUBDENOM = [
-        "inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
-        "inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
-        "qunt",
-        "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
-        "kira",
-        "DRUGS",
-        "SAI"
-    ]
-
-    POOL = [
-        "inj15ckgh6kdqg0x5p7curamjvqrsdw4cdzz5ky9v6",
-        "inj1m35kyjuegq7ruwgx787xm53e5wfwu6n5uadurl",
-        "inj193q4e4tqx2mmnkemhsf9tpdn50u5h34cf9qdnh",
-        "inj1r7ahhyfe35l04ffa5gnzsxjkgmnn9jkd5ds0vg",
-        "inj1eswdzx773we5zu2mz0zcmm7l5msr8wcss8ek0f",
-        "inj1y6x5kfc5m7vhmy8dfry2vdqsvrnqrnwmw4rea0",
-        "inj18nyltfvkyrx4wxfpdd6sn9l8wmqfr6t63y7nse",
-    ]
-
-    CREATOR = [
-        "inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk",
-        "inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk",
-        "inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64",
-        "inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk",
-        "inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq",
-        "inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89",
-        "inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm"
-    ]
-
-    CW20 = [
-        "inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
-        "inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
-        "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck"
+        },
+        {
+            "name": "Nonja",
+            "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
+            "cw20": "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
+            "denom": "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
+            "pool": "inj193q4e4tqx2mmnkemhsf9tpdn50u5h34cf9qdnh",
+            "creator": "inj14ejqjy8um4p3xfqj74yld5waqljf88f9eneuk",
+            "decimal": 18,
+        },
+        {
+            "name": "Qunt",
+            "native": "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt",
+            "cw20": "none",
+            "denom": "qunt",
+            "pool": "inj1r7ahhyfe35l04ffa5gnzsxjkgmnn9jkd5ds0vg",
+            "creator": "inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64",
+            "decimal": 6,
+        },
+        {
+            "name": "Kira",
+            "native": "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA",
+            "cw20": "none",
+            "denom": "kira",
+            "pool": "inj1eswdzx773we5zu2mz0zcmm7l5msr8wcss8ek0f",
+            "creator": "inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq",
+            "decimal": 6,
+        },
+        {
+            "name": "ffi",
+            "native": "factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi",
+            "cw20": "none",
+            "denom": "ffi",
+            "pool": "inj1hrgkrr2fxt4nrp8dqf7acmgrglfarz88qk3sms",
+            "creator": "inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc",
+            "decimal": 6,
+        },
+        {
+            "name": "drugs",
+            "native": "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS",
+            "cw20": "none",
+            "denom": "Drugs",
+            "pool": "inj1y6x5kfc5m7vhmy8dfry2vdqsvrnqrnwmw4rea0",
+            "creator": "inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89",
+            "decimal": 6,
+        },
+        {
+            "name": "sai",
+            "native": "factory/inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm/SAI",
+            "cw20": "none",
+            "denom": "SAI",
+            "pool": "inj18nyltfvkyrx4wxfpdd6sn9l8wmqfr6t63y7nse",
+            "creator": "inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm",
+            "decimal": 18,
+        }
     ]
 
     def __init__(self):
         self.network = Network.mainnet()
         self.client = AsyncClient(self.network)
 
+
     async def fetch_dex_info(self):
-
-        pair_ids = [
-            "inj15ckgh6kdqg0x5p7curamjvqrsdw4cdzz5ky9v6",
-            "inj1m35kyjuegq7ruwgx787xm53e5wfwu6n5uadurl",
-            "inj193q4e4tqx2mmnkemhsf9tpdn50u5h34cf9qdnh",
-            "inj1r7ahhyfe35l04ffa5gnzsxjkgmnn9jkd5ds0vg",
-            "inj1eswdzx773we5zu2mz0zcmm7l5msr8wcss8ek0f",
-            "inj1y6x5kfc5m7vhmy8dfry2vdqsvrnqrnwmw4rea0",
-            "inj18nyltfvkyrx4wxfpdd6sn9l8wmqfr6t63y7nse",
-        ]
-
-        NATIVE = [
-            "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
-            "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
-            "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt",
-            "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
-            "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA",
-            "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS",
-            "factory/inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm/SAI"
-        ]
-        dex_info = {}
-
         async with aiohttp.ClientSession() as session:
-            for pair_id, native in zip(pair_ids, NATIVE):
-                async with session.get(f'https://api.dexscreener.com/latest/dex/pairs/injective/{pair_id}') as response:
+            for token in self.memecoin:            
+                async with session.get(f'https://api.dexscreener.com/latest/dex/pairs/injective/{token["pool"]}') as response:
                     data = await response.json()
-                    if data is not None and 'pair' in data and data['pair'] is not None:
-                        priceUsd = data['pair'].get('priceUsd', 'NAN')
+                    if data is not None:
+                        price_usd = data['pair'].get('priceUsd', 'NAN')
                     else:
-                        priceUsd = 'None'
-                    dex_info[native] = {
-                        "priceUsd": priceUsd
-                    }
-        return dex_info
+                        price_usd = 'NAN'
+
+                    token["price_usd"] = price_usd
 
 
-    async def tracking_burn_address(self):
-        results = {}
-        for creator, subdenom, native, pool in zip(self.CREATOR, self.SUBDENOM, self.NATIVE, self.POOL):
-            metadata = await self.client.fetch_denom_authority_metadata(creator=creator, sub_denom=subdenom)
-            admin = metadata.get('authorityMetadata', {}).get('admin', '')
-            burn_status = 'No' if admin == 'inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49' or admin == 'inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk' else 'Yes'
-            results[native] = {'info': {"Burn": burn_status, "pairId": pool}}
-        return results
+    async def total_supply_native(self):
+        for token in self.memecoin:
+            total_supply = await self.client.fetch_supply_of(denom=token["native"])
 
-    async def total_supply(self):
-        supplies = {}
-        for denom, pool in zip(self.NATIVE, self.POOL):
-            supply = await self.client.fetch_supply_of(denom=denom)
-            supplies[denom] = {"info": {"denom": denom, "amount": supply["amount"]["amount"], "pairId": pool}}
+            token["total_supply_native"] = str(float(total_supply["amount"]["amount"])/ 10 ** token['decimal'])
 
-        for denom, supply_info in supplies.items():
-            fetch_info = await self.client.fetch_denom_metadata(denom=denom)
-            decimals = fetch_info['metadata']['decimals']
-            supply_info['info']['decimals'] = decimals if decimals != 0 else 18
-            supply_info['info']['amount'] = str(float(supply_info['info']['amount']) / 10**supply_info['info']['decimals'])
-        return supplies
-    
-    async def burn_supply(self):
+    async def burn_supply_native(self):
         all_bank_balances = await self.client.fetch_bank_balances(address="inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49")
-        burn_supply = [balance for balance in all_bank_balances.get('balances', []) if balance['denom'] in self.NATIVE]
+        
+        def get_token_details(native_denom):
+            for token in self.memecoin:
+                if token["native"] == native_denom:
+                    return token
+            return None
 
-        for balance in burn_supply:
-            fetch_info = await self.client.fetch_denom_metadata(denom=balance['denom'])
-            balance['decimals'] = fetch_info['metadata']['decimals']
+        native_balances = []
+        for balance in all_bank_balances.get('balances', []):
+            token_details = get_token_details(balance['denom'])
+            if token_details:
+                native_balances.append({**balance, 'decimal': token_details['decimal']})
 
-            if balance['decimals'] == 0:
-                balance['decimals'] = 18
+        for token in native_balances:
+            token['total_burn_native'] = str(float(token['amount']) / 10 ** token['decimal'])
 
-            balance['amount'] = str(float(balance['amount']) / 10**balance['decimals'])
 
-        return burn_supply
+    async def total_and_burn_supply_cw20(self):
+        cw20_tokens = [token for token in self.memecoin if token['cw20'] != "none"]
+
+        for token in cw20_tokens:
+            total_supply = 0
+            burn_coin = 0
+            holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=PaginationOption(limit=1000))
+
+            first_fetch = holders
+            while holders['pagination']['nextKey']:
+                pagination = PaginationOption(limit=1000, encoded_page_key=holders['pagination']['nextKey'])
+                holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=pagination)
+                first_fetch['models'] += holders['models']
+                first_fetch['pagination'] = holders['pagination']
+
+            for model in first_fetch['models']:
+                value_decoded = base64.b64decode(model['value']).decode('utf-8').strip('"')
+
+                if value_decoded.isdigit():
+                    amount_coin = int(value_decoded) / 1e18
+                    total_supply += amount_coin
+                    inj_address = base64.b64decode(model['key']).decode('utf-8')[9:]
+
+                    if inj_address == "inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49":
+                        burn_coin = amount_coin
+
+
+                    token['total_supply_cw20'] = amount_coin
+                    token['total_burn_cw20'] = burn_coin        
+
+
+    async def mintable(self):
+        for token in self.memecoin:
+            metadata = await self.client.fetch_denom_authority_metadata(creator=token['creator'], sub_denom=token['denom'])
+            admin = metadata.get('authorityMetadata', {}).get('admin', '')
+            mintable = 'No' if admin == 'inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49' or admin == 'inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk' else 'Yes'
+            
+            token['mintable'] = mintable
 
     async def circulation_supply(self):
-        burn_addresses = await self.tracking_burn_address()
-        total_supplies = await self.total_supply()
-        burn_supplies = await self.burn_supply()
-        dex_info = await self.fetch_dex_info()
-
-        tokenInfo = {}
-        total_all_amount_usd = 0
-        for denom, total_info in total_supplies.items():
-            burn_amount = next((balance['amount'] for balance in burn_supplies if balance['denom'] == denom), '0')
-            circulation_amount = str(float(total_info['info']['amount']) - float(burn_amount))
-            price_usd = dex_info.get(denom, {}).get('priceUsd', 0)
-            total_amount = float(price_usd) * float(circulation_amount)
-            total_all_amount_usd += total_amount
-
-            tokenInfo[denom] = {
-                "info": {
-                    "denom": denom,
-                    "Total_supply": total_info['info']['amount'],
-                    "Burn_supply": burn_amount,
-                    "Circulation_supply": circulation_amount,
-                    "Price_usd": dex_info.get(denom, {}).get('priceUsd'),
-                    "Total_amount_usd": total_all_amount_usd,
-                    **burn_addresses[denom]['info']
-                },
-                'time': datetime.now().strftime('%d-%m-%Y %H:%M')
-            }
-
-        return tokenInfo
+        await self.fetch_dex_info()
+        await self.mintable()
+        await self.total_supply_native()
+        await self.burn_supply_native()
+        await self.total_and_burn_supply_cw20()
 
 
-"""
-{'factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm': {'info': {'denom': 'factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm', 'Total_supply': '1.0', 'Burn_supply': '0', 'Circulation_supply': '1.0', 'Burn': 'yes'}, 'time': '11-01-2025 01:18'}, 
-'factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8': {'info': {'denom': 'factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8', 'Total_supply': '219483424.98607278', 'Burn_supply': '0', 'Circulation_supply': '219483424.98607278', 'Burn': 'yes'}, 'time': '11-01-2025 01:18'}, 
-'factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt': {'info': {'denom': 'factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt', 'Total_supply': '777777777.0', 'Burn_supply': '177686523.0', 'Circulation_supply': '600091254.0', 'Burn': 'yes'}, 'time': '11-01-2025 01:18'}, 
-'factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck': {'info': {'denom': 'factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck', 'Total_supply': '93138792.00990751', 'Burn_supply': '0', 'Circulation_supply': '93138792.00990751', 'Burn': 'yes'}, 'time': '11-01-2025 01:18'}, 
-'factory/inj1td7t8spd4k6uev6uunu40qvrrcwhr756d5qw59/ipepe': {'info': {'denom': 'factory/inj1td7t8spd4k6uev6uunu40qvrrcwhr756d5qw59/ipepe', 'Total_supply': '50000000.0', 'Burn_supply': '0', 'Circulation_supply': '50000000.0', 'Burn': 'no'}, 'time': '11-01-2025 01:18'}, 
-'factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi': {'info': {'denom': 'factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi', 'Total_supply': '15400.0', 'Burn_supply': '3000.000391', 'Circulation_supply': '12399.999609', 'Burn': 'yes'}, 'time': '11-01-2025 01:18'}, 
-'factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS': {'info': {'denom': 'factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS', 'Total_supply': '385887284.0', 'Burn_supply': '0', 'Circulation_supply': '385887284.0', 'Burn': 'no'}, 'time': '11-01-2025 01:18'}, 
-'factory/inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm/SAI': {'info': {'denom': 'factory/inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm/SAI', 'Total_supply': '1000000.0', 'Burn_supply': '1.0', 'Circulation_supply': '999999.0', 'Burn': 'yes'}, 'time': '11-01-2025 01:18'}}
-"""
+        for token in self.memecoin:
+            total_burn_native = float(token.get('total_burn_native', 0))
+            total_burn_cw20 = float(token.get('total_burn_cw20', 0))
+            total_supply_native = float(token.get('total_supply_native', 0))
+            total_supply_cw20 = float(token.get('total_supply_cw20', 0))
+
+            token['total_burn'] = total_burn_native + total_burn_cw20
+            token['total_supply'] = total_supply_native + total_supply_cw20
+            token['circulation_supply'] = token['total_supply'] - token['total_burn']
+            token['market_cap'] = token['circulation_supply'] * float(token['price_usd'])
+            token['time'] = datetime.now().strftime('%d-%m-%Y %H:%M')
+            token['total_token'] = len(self.memecoin)
+
+            print(self.memecoin)
+
+        return self.memecoin
 
 #async def main():
-#    injective_token_info = InjectiveTokenInfo()
-#    circulation_supplies = await injective_token_info.circulation_supply()
-#    print(circulation_supplies)
+#    token_info = InjectiveTokenInfo()
+#    await token_info.circulation_supply()
+
 
 #asyncio.run(main())

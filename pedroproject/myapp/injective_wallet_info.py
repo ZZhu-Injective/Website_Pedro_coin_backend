@@ -155,9 +155,9 @@ class InjectiveWalletInfo:
 
 
 
-async def main():
-    injective_info = InjectiveWalletInfo('inj1x6u08aa3plhk3utjk7wpyjkurtwnwp6dhudh0j')
-    wallet_info = await injective_info.my_wallet()
-    print(wallet_info)
+#async def main():
+#    injective_info = InjectiveWalletInfo('inj1x6u08aa3plhk3utjk7wpyjkurtwnwp6dhudh0j')
+#    wallet_info = await injective_info.my_wallet()
+#    print(wallet_info)
 
-asyncio.run(main())
+#asyncio.run(main())
