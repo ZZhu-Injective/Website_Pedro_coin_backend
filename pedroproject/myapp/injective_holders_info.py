@@ -28,7 +28,7 @@ class InjectiveHolders:
 
         while holders['pagination']['nextKey']:
             tasks.append(fetch_page(holders['pagination']['nextKey']))
-            if len(tasks) >= 10:  # Adjust batch size as needed
+            if len(tasks) >= 1:  # Adjust batch size as needed
                 new_data = await asyncio.gather(*tasks)
                 for data in new_data:
                     B['denomOwners'] += data['denomOwners']
@@ -55,7 +55,6 @@ class InjectiveHolders:
 
         df_holder_native = pd.DataFrame(data_wallet)
         
-
         return df_holder_native
     
     async def fetch_holders_cw20_token(self, cw20_address):
@@ -85,7 +84,6 @@ class InjectiveHolders:
         df_holders_cw20 = pd.DataFrame(holders_cw20_wallet)
         return df_holders_cw20
 
-    # Merge this two data to one dataframe.
     async def fetch_holders(self, cw20_address, native_address):
         if cw20_address == "no_cw20":
             df_holders_native = await self.fetch_holder_native_token(native_address)
@@ -103,9 +101,7 @@ class InjectiveHolders:
 
         else:
             df_holders_native = await self.fetch_holder_native_token(native_address)
-            print(df_holders_native)
             df_holders_cw20 = await self.fetch_holders_cw20_token(cw20_address)
-            print(df_holders_cw20)
             df_holders_cw20.rename(columns={'value': 'cw20_value'}, inplace=True)
             df_holders_native.rename(columns={'value': 'native_value'}, inplace=True)
 
@@ -120,15 +116,64 @@ class InjectiveHolders:
 
         # Sorting and formatting the dataframe
         merged_df = merged_df.sort_values(by='total_value', ascending=False)
-        merged_df = merged_df.round({'total_value': 0, 'percentage': 5, 'native_value': 2, 'cw20_value': 2})
+        merged_df = merged_df.round({'total_value': 0, 'percentage': 5, 'native_value': 0, 'cw20_value': 0})
         merged_df = merged_df.reset_index(drop=True)
         merged_df['Top'] = merged_df.index + 1
 
-        current_time = datetime.now().strftime('%d-%m-%Y %H:%M')
-        dict_holders = {
-            "timestamp": current_time,
-            "holders": merged_df.to_dict('records')
+        burn_addresses = [
+            'inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49',
+            'inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm',
+            'inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8',
+            'inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck',
+        ]
+
+        creator_addresses = {
+            'inj1x6u08aa3plhk3utjk7wpyjkurtwnwp6dhudh0j': 'Creator Pedro',
+            'inj1y43urcm8w0vzj74ys6pwl422qtd0a278hqchw8': 'Future Pedro',
+            'inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64': 'Creator Qunt',
+            'inj1pr5lyuez8ak94tpuz9fs7dkpst7pkc9uuhfhvm': 'Creator Shroom',
+            'inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq': 'Creator Kira',
+            'inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc': 'Creator FFI',
+            'inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89': 'Creator Drugs',
+            'inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm': 'Creator Sai'
         }
 
-        print(dict_holders)     
+        pool_addresses = {
+            'inj15ckgh6kdqg0x5p7curamjvqrsdw4cdzz5ky9v6': 'Pool Pedro/Inj',
+            'inj13t5f8yvlsxxnwyz9d7fdc9ahduhxcf45qlm8xt': 'Pool Pedro/Dojo',
+            'inj1r7ahhyfe35l04ffa5gnzsxjkgmnn9jkd5ds0vg': 'Pool Nonja/Inj',
+            'inj1eswdzx773we5zu2mz0zcmm7l5msr8wcss8ek0f': 'Pool Kira/Inj',
+            'inj1hrgkrr2fxt4nrp8dqf7acmgrglfarz88qk3sms': 'Pool FFI/Inj',
+            'inj1y6x5kfc5m7vhmy8dfry2vdqsvrnqrnwmw4rea0': 'Pool Drugs/Inj',
+            'inj18nyltfvkyrx4wxfpdd6sn9l8wmqfr6t63y7nse': 'Pool Sai/Shroom',
+            'inj1m35kyjuegq7ruwgx787xm53e5wfwu6n5uadurl': 'Pool Shroom/Inj',
+        }
+
+        merged_df['info'] = merged_df['key'].apply(
+            lambda x: 'Burn Address' if x in burn_addresses else creator_addresses.get(x, pool_addresses.get(x, '-'))
+        )
+
+        # Exclude burn and pool addresses
+        filtered_df = merged_df[~merged_df['key'].isin(burn_addresses + list(pool_addresses.keys()))]
+
+        top_10_sum = filtered_df['percentage'].nlargest(10).sum()
+        top_20_sum = filtered_df['percentage'].nlargest(20).sum()
+        top_50_sum = filtered_df['percentage'].nlargest(50).sum()
+
+        print(top_10_sum)
+        print(top_20_sum)
+        print(top_50_sum)
+
+        current_time = datetime.now().strftime('%d-%m-%Y %H:%M')
+        total_holders = len(merged_df)
+        dict_holders = {
+            "timestamp": current_time,
+            "totalholders": total_holders,
+            "top_10": top_10_sum,
+            "top_20": top_20_sum,
+            "top_50": top_50_sum,
+            "holders": merged_df.to_dict('records')
+        }
         return dict_holders
+
+

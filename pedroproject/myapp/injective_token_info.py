@@ -33,7 +33,7 @@ class InjectiveTokenInfo:
             "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
             "cw20": "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
             "denom": "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
-            "pool": "inj193q4e4tqx2mmnkemhsf9tpdn50u5h34cf9qdnh",
+            "pool": "inj1r7ahhyfe35l04ffa5gnzsxjkgmnn9jkd5ds0vg",
             "creator": "inj14ejqjy8um4p3xfqj74yld5waqljf88f9eneuk",
             "decimal": 18,
         },
@@ -42,7 +42,7 @@ class InjectiveTokenInfo:
             "native": "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt",
             "cw20": "none",
             "denom": "qunt",
-            "pool": "inj1r7ahhyfe35l04ffa5gnzsxjkgmnn9jkd5ds0vg",
+            "pool": "inj193q4e4tqx2mmnkemhsf9tpdn50u5h34cf9qdnh",
             "creator": "inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64",
             "decimal": 6,
         },
@@ -94,20 +94,23 @@ class InjectiveTokenInfo:
             for token in self.memecoin:            
                 async with session.get(f'https://api.dexscreener.com/latest/dex/pairs/injective/{token["pool"]}') as response:
                     data = await response.json()
-                    if data is not None:
-                        price_usd = data['pair'].get('priceUsd', 'NAN')
+                    if data['pair'] is not None:
+                        price_usd = data['pair'].get('priceUsd', 'Nan')
                     else:
-                        price_usd = 'NAN'
+                        price_usd = 'Nan'
 
                     token["price_usd"] = price_usd
 
 
     async def total_supply_native(self):
         for token in self.memecoin:
-            total_supply = await self.client.fetch_supply_of(denom=token["native"])
+            if token['name'] == "Pedro" or token["name"] == "Shroom" or token["name"] == "Nonja":
+                token["total_supply_native"] = 0
+            else:
+                total_supply = await self.client.fetch_supply_of(denom=token["native"])
+                token["total_supply_native"] = str(float(total_supply["amount"]["amount"])/ 10 ** token['decimal'])
 
-            token["total_supply_native"] = str(float(total_supply["amount"]["amount"])/ 10 ** token['decimal'])
-
+        
     async def burn_supply_native(self):
         all_bank_balances = await self.client.fetch_bank_balances(address="inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49")
         
@@ -117,15 +120,11 @@ class InjectiveTokenInfo:
                     return token
             return None
 
-        native_balances = []
         for balance in all_bank_balances.get('balances', []):
             token_details = get_token_details(balance['denom'])
+
             if token_details:
-                native_balances.append({**balance, 'decimal': token_details['decimal']})
-
-        for token in native_balances:
-            token['total_burn_native'] = str(float(token['amount']) / 10 ** token['decimal'])
-
+                token_details['total_burn_native'] = str(float(balance['amount']) / 10 ** token_details['decimal'])
 
     async def total_and_burn_supply_cw20(self):
         cw20_tokens = [token for token in self.memecoin if token['cw20'] != "none"]
@@ -146,16 +145,18 @@ class InjectiveTokenInfo:
                 value_decoded = base64.b64decode(model['value']).decode('utf-8').strip('"')
 
                 if value_decoded.isdigit():
-                    amount_coin = int(value_decoded) / 1e18
+                    amount_coin = float(value_decoded) / 10 ** 18
+
                     total_supply += amount_coin
+                    
                     inj_address = base64.b64decode(model['key']).decode('utf-8')[9:]
 
-                    if inj_address == "inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49":
-                        burn_coin = amount_coin
+                    if inj_address == "inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49" or inj_address == token['cw20']:
+                        burn_coin += amount_coin
 
 
-                    token['total_supply_cw20'] = amount_coin
-                    token['total_burn_cw20'] = burn_coin        
+                    token['total_supply_cw20'] = total_supply
+                    token['total_burn_cw20'] = burn_coin                      
 
 
     async def mintable(self):
@@ -173,6 +174,7 @@ class InjectiveTokenInfo:
         await self.burn_supply_native()
         await self.total_and_burn_supply_cw20()
 
+        total_market_cap = 0
 
         for token in self.memecoin:
             total_burn_native = float(token.get('total_burn_native', 0))
@@ -183,17 +185,21 @@ class InjectiveTokenInfo:
             token['total_burn'] = total_burn_native + total_burn_cw20
             token['total_supply'] = total_supply_native + total_supply_cw20
             token['circulation_supply'] = token['total_supply'] - token['total_burn']
-            token['market_cap'] = token['circulation_supply'] * float(token['price_usd'])
+            if token['price_usd']=="Nan":
+                token['market_cap'] = "Nan"
+            else:
+                token['market_cap'] = token['circulation_supply'] * float(token.get('price_usd', 0))
+
             token['time'] = datetime.now().strftime('%d-%m-%Y %H:%M')
             token['total_token'] = len(self.memecoin)
+            
+            if token['market_cap'] == "Nan": 
+                continue
+            else:
+                total_market_cap += token['market_cap']
 
-            print(self.memecoin)
 
+        for token in self.memecoin:
+            token['total_market_cap'] = total_market_cap
+        
         return self.memecoin
-
-#async def main():
-#    token_info = InjectiveTokenInfo()
-#    await token_info.circulation_supply()
-
-
-#asyncio.run(main())

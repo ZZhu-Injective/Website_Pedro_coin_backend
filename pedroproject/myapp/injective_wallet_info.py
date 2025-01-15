@@ -152,12 +152,3 @@ class InjectiveWalletInfo:
             'time': datetime.now().strftime('%d-%m-%Y %H:%M')
         }
         return result
-
-
-
-#async def main():
-#    injective_info = InjectiveWalletInfo('inj1x6u08aa3plhk3utjk7wpyjkurtwnwp6dhudh0j')
-#    wallet_info = await injective_info.my_wallet()
-#    print(wallet_info)
-
-#asyncio.run(main())
