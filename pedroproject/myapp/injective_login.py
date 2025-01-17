@@ -81,10 +81,3 @@ class InjectiveLogin:
         else:
             return "no"
 
-async def main():
-    address = "inj1x6u08aa3plhk3utjk7wpyjkurtwnwp6dhudh0j"
-    token_info = InjectiveLogin(address)
-    result = await token_info.check_total_balance()
-    print(result)
-
-asyncio.run(main())

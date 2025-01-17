@@ -6,4 +6,5 @@ urlpatterns = [
     path('token_info/', views.token_info_view, name='token_info'),
     path('token_holders/<path:native_address>/<path:cw20_address>/', views.token_holders_view, name='token_holders'),
     path('nft_holders/<path:cw20_address>/', views.nft_holders_view, name='nft_holders'),
+    path('check/<path:address>/', views.check_wallet, name='check_wallet'),
 ]
