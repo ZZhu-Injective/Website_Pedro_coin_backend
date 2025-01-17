@@ -1,7 +1,6 @@
 import base64
 from datetime import datetime
 import json
-import time
 import asyncio
 import pandas as pd
 from pyinjective.core.network import Network
@@ -60,6 +59,7 @@ class InjectiveHolders:
     async def fetch_holders_cw20_token(self, cw20_address):
         holders_cw20_wallet = []
         holders = await self.client.fetch_all_contracts_state(address=cw20_address, pagination=PaginationOption(limit=1000))
+
         if holders is None:
             return
 
@@ -80,7 +80,7 @@ class InjectiveHolders:
 
             except (ValueError, json.JSONDecodeError):
                 continue
-
+        
         df_holders_cw20 = pd.DataFrame(holders_cw20_wallet)
         return df_holders_cw20
 
@@ -94,11 +94,6 @@ class InjectiveHolders:
             df_holders_cw20['cw20_value'] = 0
             df_holders_cw20 = df_holders_cw20.drop(columns=['native_value'])
             
-        elif native_address == "no_native":
-            df_holders_cw20 = await self.fetch_holders_cw20_token(cw20_address)
-            df_holders_cw20.rename(columns={'value': 'cw20_value'}, inplace=True)
-            df_holders_native = pd.DataFrame(columns=['key', 'native_value'])
-
         else:
             df_holders_native = await self.fetch_holder_native_token(native_address)
             df_holders_cw20 = await self.fetch_holders_cw20_token(cw20_address)
@@ -153,12 +148,11 @@ class InjectiveHolders:
             lambda x: 'Burn Address' if x in burn_addresses else creator_addresses.get(x, pool_addresses.get(x, '-'))
         )
 
-        # Exclude burn and pool addresses
         filtered_df = merged_df[~merged_df['key'].isin(burn_addresses + list(pool_addresses.keys()))]
 
-        top_10_sum = filtered_df['percentage'].nlargest(10).sum()
-        top_20_sum = filtered_df['percentage'].nlargest(20).sum()
-        top_50_sum = filtered_df['percentage'].nlargest(50).sum()
+        top_10_sum = round(filtered_df['percentage'].nlargest(10).sum())
+        top_20_sum = round(filtered_df['percentage'].nlargest(20).sum())
+        top_50_sum = round(filtered_df['percentage'].nlargest(50).sum())
 
         print(top_10_sum)
         print(top_20_sum)
