@@ -102,5 +102,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
-    'https://website-pedro-coin-4.vercel.app/',  # Add your frontend origin here
+    "https://website-pedro-coin-4.vercel.app",
 ]
