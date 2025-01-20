@@ -12,7 +12,7 @@ SECRET_KEY = 'django-insecure-0otj9uashl9m2cyh*(zc#4^^731)79(q)2!tgbwp-ho8qj)2mw
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['api.pedroinjraccoon.online', 'website-pedro-coin-4-c5aj.vercel.app', 'localhost', '127.0.0.1']
 
 # Application definition
 INSTALLED_APPS = [
@@ -102,5 +102,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
-    "https://website-pedro-coin-4.vercel.app",
+    "https://website-pedro-coin-4-c5aj.vercel.app",
+    "http://localhost:3000",
+    "https://pedroinjraccoon.online",
 ]
