@@ -1,4 +1,5 @@
 from django.http import JsonResponse
+from django.shortcuts import render
 from .injective_wallet_info import InjectiveWalletInfo
 from .injective_token_info import InjectiveTokenInfo
 from .injective_meme_holders import InjectiveHolders
@@ -30,3 +31,6 @@ async def check_wallet(request, address):
     check = InjectiveLogin(address=address)
     info = await check.check_total_balance()
     return JsonResponse(info, safe=False)
+
+def home(request):
+    return render(request, 'home.html')
