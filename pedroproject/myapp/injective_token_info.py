@@ -6,10 +6,11 @@ from pyinjective.client.model.pagination import PaginationOption
 from pyinjective.async_client import AsyncClient
 from pyinjective.core.network import Network
 
+
 class InjectiveTokenInfo:
 
     memecoin = [
-        {
+                {
             "name": "Pedro",
             "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
             "cw20": "inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
@@ -88,91 +89,83 @@ class InjectiveTokenInfo:
         self.network = Network.mainnet()
         self.client = AsyncClient(self.network)
 
-
     async def fetch_dex_info(self):
         async with aiohttp.ClientSession() as session:
-            for token in self.memecoin:            
-                async with session.get(f'https://api.dexscreener.com/latest/dex/pairs/injective/{token["pool"]}') as response:
-                    data = await response.json()
-                    if data['pair'] is not None:
-                        price_usd = data['pair'].get('priceUsd', 'Nan')
-                    else:
-                        price_usd = 'Nan'
-
-                    token["price_usd"] = price_usd
-
+            tasks = [
+                session.get(f'https://api.dexscreener.com/latest/dex/pairs/injective/{token["pool"]}')
+                for token in self.memecoin
+            ]
+            responses = await asyncio.gather(*tasks)
+            for token, response in zip(self.memecoin, responses):
+                data = await response.json()
+                token["price_usd"] = data['pair'].get('priceUsd', 'Nan') if data.get('pair') else 'Nan'
 
     async def total_supply_native(self):
+        tasks = []
         for token in self.memecoin:
-            if token['name'] == "Pedro" or token["name"] == "Shroom" or token["name"] == "Nonja":
-                token["total_supply_native"] = 0
-            else:
-                total_supply = await self.client.fetch_supply_of(denom=token["native"])
-                token["total_supply_native"] = str(float(total_supply["amount"]["amount"])/ 10 ** token['decimal'])
+            if token['name'] not in {"Pedro", "Shroom", "Nonja"}:
+                tasks.append(self.client.fetch_supply_of(denom=token["native"]))
 
-        
+        results = await asyncio.gather(*tasks)
+        for token, supply in zip((t for t in self.memecoin if t['name'] not in {"Pedro", "Shroom", "Nonja"}), results):
+            token["total_supply_native"] = str(float(supply["amount"]["amount"]) / 10 ** token['decimal'])
+
     async def burn_supply_native(self):
         all_bank_balances = await self.client.fetch_bank_balances(address="inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49")
-        
-        def get_token_details(native_denom):
-            for token in self.memecoin:
-                if token["native"] == native_denom:
-                    return token
-            return None
+
+        native_tokens = {token["native"]: token for token in self.memecoin}
 
         for balance in all_bank_balances.get('balances', []):
-            token_details = get_token_details(balance['denom'])
-
-            if token_details:
-                token_details['total_burn_native'] = str(float(balance['amount']) / 10 ** token_details['decimal'])
+            token = native_tokens.get(balance['denom'])
+            if token:
+                token['total_burn_native'] = str(float(balance['amount']) / 10 ** token['decimal'])
 
     async def total_and_burn_supply_cw20(self):
-        cw20_tokens = [token for token in self.memecoin if token['cw20'] != "none"]
-
-        for token in cw20_tokens:
+        async def fetch_holders(token):
+            holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=PaginationOption(limit=1000))
             total_supply = 0
             burn_coin = 0
-            holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=PaginationOption(limit=1000))
 
-            first_fetch = holders
-            while holders['pagination']['nextKey']:
-                pagination = PaginationOption(limit=1000, encoded_page_key=holders['pagination']['nextKey'])
-                holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=pagination)
-                first_fetch['models'] += holders['models']
-                first_fetch['pagination'] = holders['pagination']
+            while holders:
+                for model in holders['models']:
+                    value_decoded = base64.b64decode(model['value']).decode('utf-8').strip('"')
+                    if value_decoded.isdigit():
+                        amount_coin = float(value_decoded) / 10 ** 18
+                        total_supply += amount_coin
+                        inj_address = base64.b64decode(model['key']).decode('utf-8')[9:]
+                        if inj_address in {"inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49", token['cw20']}:
+                            burn_coin += amount_coin
 
-            for model in first_fetch['models']:
-                value_decoded = base64.b64decode(model['value']).decode('utf-8').strip('"')
+                next_key = holders['pagination'].get('nextKey')
+                if not next_key:
+                    break
+                holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=PaginationOption(limit=1000, encoded_page_key=next_key))
 
-                if value_decoded.isdigit():
-                    amount_coin = float(value_decoded) / 10 ** 18
+            token['total_supply_cw20'] = total_supply
+            token['total_burn_cw20'] = burn_coin
 
-                    total_supply += amount_coin
-                    
-                    inj_address = base64.b64decode(model['key']).decode('utf-8')[9:]
-
-                    if inj_address == "inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49" or inj_address == token['cw20']:
-                        burn_coin += amount_coin
-
-
-                    token['total_supply_cw20'] = total_supply
-                    token['total_burn_cw20'] = burn_coin                      
-
+        tasks = [fetch_holders(token) for token in self.memecoin if token['cw20'] != "none"]
+        await asyncio.gather(*tasks)
 
     async def mintable(self):
-        for token in self.memecoin:
-            metadata = await self.client.fetch_denom_authority_metadata(creator=token['creator'], sub_denom=token['denom'])
+        tasks = [
+            self.client.fetch_denom_authority_metadata(creator=token['creator'], sub_denom=token['denom'])
+            for token in self.memecoin
+        ]
+        results = await asyncio.gather(*tasks)
+
+        for token, metadata in zip(self.memecoin, results):
             admin = metadata.get('authorityMetadata', {}).get('admin', '')
-            mintable = 'No' if admin == 'inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49' or admin == 'inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk' else 'Yes'
-            
-            token['mintable'] = mintable
+            token['mintable'] = 'No' if admin in {"inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49", "inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk"} else 'Yes'
 
     async def circulation_supply(self):
-        await self.fetch_dex_info()
-        await self.mintable()
-        await self.total_supply_native()
-        await self.burn_supply_native()
-        await self.total_and_burn_supply_cw20()
+        await asyncio.gather(
+            self.fetch_dex_info(),
+            self.mintable(),
+            self.total_supply_native(),
+            self.burn_supply_native(),
+            self.total_and_burn_supply_cw20()
+        )
 
         total_market_cap = 0
 
@@ -185,21 +178,19 @@ class InjectiveTokenInfo:
             token['total_burn'] = total_burn_native + total_burn_cw20
             token['total_supply'] = total_supply_native + total_supply_cw20
             token['circulation_supply'] = token['total_supply'] - token['total_burn']
-            if token['price_usd']=="Nan":
+
+            if token['price_usd'] == "Nan":
                 token['market_cap'] = "Nan"
             else:
-                token['market_cap'] = token['circulation_supply'] * float(token.get('price_usd', 0))
+                token['market_cap'] = token['circulation_supply'] * float(token['price_usd'])
 
             token['time'] = datetime.now().strftime('%d-%m-%Y %H:%M')
             token['total_token'] = len(self.memecoin)
-            
-            if token['market_cap'] == "Nan": 
-                continue
-            else:
-                total_market_cap += token['market_cap']
 
+            if token['market_cap'] != "Nan":
+                total_market_cap += token['market_cap']
 
         for token in self.memecoin:
             token['total_market_cap'] = total_market_cap
-        
+
         return self.memecoin
