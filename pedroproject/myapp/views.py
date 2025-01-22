@@ -1,4 +1,5 @@
 from django.http import JsonResponse
+from django.http import HttpResponse
 from django.shortcuts import render
 from .injective_wallet_info import InjectiveWalletInfo
 from .injective_token_info import InjectiveTokenInfo
@@ -20,7 +21,8 @@ async def token_info_view(request):
 async def token_holders_view(request, native_address, cw20_address):
     token = InjectiveHolders()
     info = await token.fetch_holders(cw20_address=cw20_address, native_address=native_address)
-    return JsonResponse(info, safe=False)
+    return HttpResponse(info, content_type='application/x-msgpack')
+
 
 async def nft_holders_view(request, cw20_address):
     nft = InjectiveHolders2()
@@ -34,3 +36,4 @@ async def check_wallet(request, address):
 
 def home(request):
     return render(request, 'home.html')
+
