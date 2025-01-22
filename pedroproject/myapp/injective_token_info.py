@@ -10,6 +10,82 @@ from pyinjective.client.model.pagination import PaginationOption
 
 class InjectiveTokenInfo:
 
+    memecoin = [
+            {
+                "name": "Pedro",
+                "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
+                "cw20": "inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
+                "denom": "inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
+                "pool": "inj15ckgh6kdqg0x5p7curamjvqrsdw4cdzz5ky9v6",
+                "creator": "inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk",
+                "decimal": 18,
+            },
+            {
+                "name": "Shroom",
+                "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
+                "cw20": "inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
+                "denom": "inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
+                "pool": "inj1m35kyjuegq7ruwgx787xm53e5wfwu6n5uadurl",
+                "creator": "inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk",
+                "decimal": 18,
+
+            },
+            {
+                "name": "Nonja",
+                "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
+                "cw20": "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
+                "denom": "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
+                "pool": "inj1r7ahhyfe35l04ffa5gnzsxjkgmnn9jkd5ds0vg",
+                "creator": "inj14ejqjy8um4p3xfqj74yld5waqljf88f9eneuk",
+                "decimal": 18,
+            },
+            {
+                "name": "Qunt",
+                "native": "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt",
+                "cw20": "none",
+                "denom": "qunt",
+                "pool": "inj193q4e4tqx2mmnkemhsf9tpdn50u5h34cf9qdnh",
+                "creator": "inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64",
+                "decimal": 6,
+            },
+            {
+                "name": "Kira",
+                "native": "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA",
+                "cw20": "none",
+                "denom": "kira",
+                "pool": "inj1eswdzx773we5zu2mz0zcmm7l5msr8wcss8ek0f",
+                "creator": "inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq",
+                "decimal": 6,
+            },
+            {
+                "name": "ffi",
+                "native": "factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi",
+                "cw20": "none",
+                "denom": "ffi",
+                "pool": "inj1hrgkrr2fxt4nrp8dqf7acmgrglfarz88qk3sms",
+                "creator": "inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc",
+                "decimal": 6,
+            },
+            {
+                "name": "drugs",
+                "native": "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS",
+                "cw20": "none",
+                "denom": "Drugs",
+                "pool": "inj1y6x5kfc5m7vhmy8dfry2vdqsvrnqrnwmw4rea0",
+                "creator": "inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89",
+                "decimal": 6,
+            },
+            {
+                "name": "sai",
+                "native": "factory/inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm/SAI",
+                "cw20": "none",
+                "denom": "SAI",
+                "pool": "inj18nyltfvkyrx4wxfpdd6sn9l8wmqfr6t63y7nse",
+                "creator": "inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm",
+                "decimal": 18,
+            }
+        ]
+
     def __init__(self):
         self.network = Network.mainnet()
         self.client = AsyncClient(self.network)
