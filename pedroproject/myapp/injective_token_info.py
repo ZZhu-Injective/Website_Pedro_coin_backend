@@ -8,7 +8,7 @@ from pyinjective.core.network import Network
 from pyinjective.async_client import AsyncClient
 from pyinjective.client.model.pagination import PaginationOption
 
-class InjectiveHolders:
+class InjectiveTokenInfo:
 
     def __init__(self):
         self.network = Network.mainnet()
