@@ -7,7 +7,6 @@ import pandas as pd
 from pyinjective.core.network import Network
 from pyinjective.async_client import AsyncClient
 from pyinjective.client.model.pagination import PaginationOption
-import backoff
 
 class InjectiveHolders:
 
@@ -15,13 +14,12 @@ class InjectiveHolders:
         self.network = Network.mainnet()
         self.client = AsyncClient(self.network)
 
-    @backoff.on_exception(backoff.expo, Exception, max_tries=5)
-    async def fetch_page(self, native_address, pagination_key=None):
-        pagination = PaginationOption(limit=1000, encoded_page_key=pagination_key)
-        return await self.client.fetch_denom_owners(denom=native_address, pagination=pagination)
-
     async def fetch_holder_native_token(self, native_address):
-        holders = await self.fetch_page(native_address)
+        async def fetch_page(pagination_key=None):
+            pagination = PaginationOption(limit=1000, encoded_page_key=pagination_key)
+            return await self.client.fetch_denom_owners(denom=native_address, pagination=pagination)
+
+        holders = await fetch_page()
         if holders is None:
             return
 
@@ -29,7 +27,7 @@ class InjectiveHolders:
         B = holders
 
         while holders['pagination']['nextKey']:
-            tasks.append(self.fetch_page(native_address, holders['pagination']['nextKey']))
+            tasks.append(fetch_page(holders['pagination']['nextKey']))
             if len(tasks) >= 1:  # Adjust batch size as needed
                 new_data = await asyncio.gather(*tasks)
                 for data in new_data:
@@ -59,7 +57,6 @@ class InjectiveHolders:
         
         return df_holder_native
     
-    @backoff.on_exception(backoff.expo, Exception, max_tries=5)
     async def fetch_holders_cw20_token(self, cw20_address):
         holders_cw20_wallet = []
         holders = await self.client.fetch_all_contracts_state(address=cw20_address, pagination=PaginationOption(limit=1000))
@@ -152,6 +149,7 @@ class InjectiveHolders:
             lambda x: 'Burn Address' if x in burn_addresses else creator_addresses.get(x, pool_addresses.get(x, '-'))
         )
 
+
         filtered_df = merged_df[~merged_df['key'].isin(burn_addresses + list(pool_addresses.keys()))]
 
         top_10_sum = round(filtered_df['percentage'].nlargest(10).sum())
@@ -161,6 +159,44 @@ class InjectiveHolders:
         print(top_10_sum)
         print(top_20_sum)
         print(top_50_sum)
+
+        if native_address == "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt":
+
+            # Calculate the sum of all removed rows
+            removed_sum_native = merged_df[merged_df['total_value'] <= 2]['native_value'].sum()
+            removed_sum_cw20 = merged_df[merged_df['total_value'] <= 2]['cw20_value'].sum()
+
+            # Calculate the percentage for the new row
+            total_supply = merged_df['total_value'].sum()
+            percentage = (removed_sum_native / total_supply) * 100
+
+            # Find the current lowest 'Top' value and add 1
+            lowest_top = merged_df['Top'].max() + 1
+
+            # Create the new row as a dataframe
+            new_row = pd.DataFrame({
+                'key': ['lower than 2'],
+                'native_value': [removed_sum_native],
+                'cw20_value': [removed_sum_cw20],
+                'total_value': [removed_sum_native + removed_sum_cw20],
+                'percentage': [percentage],
+                'Top': [lowest_top],
+                'info': ['-']
+            })
+
+            # Concatenate the new row to the existing dataframe
+
+            # Remove rows where total_value is less than 2
+            merged_df = merged_df[merged_df['total_value'] >= 3]
+
+            merged_df = pd.concat([merged_df, new_row], ignore_index=True)
+
+
+
+            # Print the updated dataframe
+        print(merged_df)
+
+
 
         current_time = datetime.now().strftime('%d-%m-%Y %H:%M')
         total_holders = len(merged_df)
@@ -179,4 +215,12 @@ class InjectiveHolders:
         return msgpack_data
 
 
+async def main():
+    token = InjectiveHolders()
+    cw20_address = "no_cw20"
+    native_address = "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt"
+    info = await token.fetch_holders(cw20_address=cw20_address, native_address=native_address)
+    
 
+# Run the main function
+asyncio.run(main())

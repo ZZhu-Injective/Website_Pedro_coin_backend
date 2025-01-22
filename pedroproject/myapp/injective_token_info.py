@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import aiohttp
+import backoff
 from datetime import datetime
 from pyinjective.client.model.pagination import PaginationOption
 from pyinjective.async_client import AsyncClient
@@ -85,10 +86,12 @@ class InjectiveTokenInfo:
         }
     ]
 
+
     def __init__(self):
         self.network = Network.mainnet()
         self.client = AsyncClient(self.network)
 
+    @backoff.on_exception(backoff.expo, aiohttp.ClientError, max_tries=5)
     async def fetch_dex_info(self):
         async with aiohttp.ClientSession() as session:
             tasks = [
