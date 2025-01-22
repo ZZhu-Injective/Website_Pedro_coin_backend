@@ -173,7 +173,6 @@ class InjectiveHolders:
             "holders": merged_df.to_dict('records')
         }
 
-        # Convert dict_holders to MessagePack format
         msgpack_data = msgpack.packb(dict_holders, use_bin_type=True)
 
         return msgpack_data
