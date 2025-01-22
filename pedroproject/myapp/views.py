@@ -15,7 +15,7 @@ async def wallet_info_view(request, address):
 
 async def token_info_view(request):
     token = InjectiveTokenInfo()
-    info = await token.circulation_supply()
+    info = await token.fetch_holders()
     return JsonResponse(info, safe=False)
 
 async def token_holders_view(request, native_address, cw20_address):
