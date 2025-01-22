@@ -1,284 +1,204 @@
 import base64
-import msgpack
+import aiohttp
 from datetime import datetime
-import json
-import asyncio
-import pandas as pd
-from pyinjective.core.network import Network
-from pyinjective.async_client import AsyncClient
 from pyinjective.client.model.pagination import PaginationOption
+from pyinjective.async_client import AsyncClient
+from pyinjective.core.network import Network
 
 class InjectiveTokenInfo:
 
     memecoin = [
-            {
-                "name": "Pedro",
-                "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
-                "cw20": "inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
-                "denom": "inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
-                "pool": "inj15ckgh6kdqg0x5p7curamjvqrsdw4cdzz5ky9v6",
-                "creator": "inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk",
-                "decimal": 18,
-            },
-            {
-                "name": "Shroom",
-                "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
-                "cw20": "inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
-                "denom": "inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
-                "pool": "inj1m35kyjuegq7ruwgx787xm53e5wfwu6n5uadurl",
-                "creator": "inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk",
-                "decimal": 18,
+        {
+            "name": "Pedro",
+            "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
+            "cw20": "inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
+            "denom": "inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm",
+            "pool": "inj15ckgh6kdqg0x5p7curamjvqrsdw4cdzz5ky9v6",
+            "creator": "inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk",
+            "decimal": 18,
+        },
+        {
+            "name": "Shroom",
+            "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
+            "cw20": "inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
+            "denom": "inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8",
+            "pool": "inj1m35kyjuegq7ruwgx787xm53e5wfwu6n5uadurl",
+            "creator": "inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk",
+            "decimal": 18,
 
-            },
-            {
-                "name": "Nonja",
-                "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
-                "cw20": "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
-                "denom": "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
-                "pool": "inj1r7ahhyfe35l04ffa5gnzsxjkgmnn9jkd5ds0vg",
-                "creator": "inj14ejqjy8um4p3xfqj74yld5waqljf88f9eneuk",
-                "decimal": 18,
-            },
-            {
-                "name": "Qunt",
-                "native": "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt",
-                "cw20": "none",
-                "denom": "qunt",
-                "pool": "inj193q4e4tqx2mmnkemhsf9tpdn50u5h34cf9qdnh",
-                "creator": "inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64",
-                "decimal": 6,
-            },
-            {
-                "name": "Kira",
-                "native": "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA",
-                "cw20": "none",
-                "denom": "kira",
-                "pool": "inj1eswdzx773we5zu2mz0zcmm7l5msr8wcss8ek0f",
-                "creator": "inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq",
-                "decimal": 6,
-            },
-            {
-                "name": "ffi",
-                "native": "factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi",
-                "cw20": "none",
-                "denom": "ffi",
-                "pool": "inj1hrgkrr2fxt4nrp8dqf7acmgrglfarz88qk3sms",
-                "creator": "inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc",
-                "decimal": 6,
-            },
-            {
-                "name": "drugs",
-                "native": "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS",
-                "cw20": "none",
-                "denom": "Drugs",
-                "pool": "inj1y6x5kfc5m7vhmy8dfry2vdqsvrnqrnwmw4rea0",
-                "creator": "inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89",
-                "decimal": 6,
-            },
-            {
-                "name": "sai",
-                "native": "factory/inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm/SAI",
-                "cw20": "none",
-                "denom": "SAI",
-                "pool": "inj18nyltfvkyrx4wxfpdd6sn9l8wmqfr6t63y7nse",
-                "creator": "inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm",
-                "decimal": 18,
-            }
-        ]
+        },
+        {
+            "name": "Nonja",
+            "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
+            "cw20": "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
+            "denom": "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
+            "pool": "inj1r7ahhyfe35l04ffa5gnzsxjkgmnn9jkd5ds0vg",
+            "creator": "inj14ejqjy8um4p3xfqj74yld5waqljf88f9eneuk",
+            "decimal": 18,
+        },
+        {
+            "name": "Qunt",
+            "native": "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt",
+            "cw20": "none",
+            "denom": "qunt",
+            "pool": "inj193q4e4tqx2mmnkemhsf9tpdn50u5h34cf9qdnh",
+            "creator": "inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64",
+            "decimal": 6,
+        },
+        {
+            "name": "Kira",
+            "native": "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA",
+            "cw20": "none",
+            "denom": "kira",
+            "pool": "inj1eswdzx773we5zu2mz0zcmm7l5msr8wcss8ek0f",
+            "creator": "inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq",
+            "decimal": 6,
+        },
+        {
+            "name": "ffi",
+            "native": "factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi",
+            "cw20": "none",
+            "denom": "ffi",
+            "pool": "inj1hrgkrr2fxt4nrp8dqf7acmgrglfarz88qk3sms",
+            "creator": "inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc",
+            "decimal": 6,
+        },
+        {
+            "name": "drugs",
+            "native": "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS",
+            "cw20": "none",
+            "denom": "Drugs",
+            "pool": "inj1y6x5kfc5m7vhmy8dfry2vdqsvrnqrnwmw4rea0",
+            "creator": "inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89",
+            "decimal": 6,
+        },
+        {
+            "name": "sai",
+            "native": "factory/inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm/SAI",
+            "cw20": "none",
+            "denom": "SAI",
+            "pool": "inj18nyltfvkyrx4wxfpdd6sn9l8wmqfr6t63y7nse",
+            "creator": "inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm",
+            "decimal": 18,
+        }
+    ]
 
     def __init__(self):
         self.network = Network.mainnet()
         self.client = AsyncClient(self.network)
 
-    async def fetch_holder_native_token(self, native_address):
-        async def fetch_page(pagination_key=None):
-            pagination = PaginationOption(limit=1000, encoded_page_key=pagination_key)
-            return await self.client.fetch_denom_owners(denom=native_address, pagination=pagination)
 
-        holders = await fetch_page()
-        if holders is None:
-            return
+    async def fetch_dex_info(self):
+        async with aiohttp.ClientSession() as session:
+            for token in self.memecoin:            
+                async with session.get(f'https://api.dexscreener.com/latest/dex/pairs/injective/{token["pool"]}') as response:
+                    data = await response.json()
+                    if data['pair'] is not None:
+                        price_usd = data['pair'].get('priceUsd', 'Nan')
+                    else:
+                        price_usd = 'Nan'
 
-        tasks = []
-        B = holders
+                    token["price_usd"] = price_usd
 
-        while holders['pagination']['nextKey']:
-            tasks.append(fetch_page(holders['pagination']['nextKey']))
-            if len(tasks) >= 1:  # Adjust batch size as needed
-                new_data = await asyncio.gather(*tasks)
-                for data in new_data:
-                    B['denomOwners'] += data['denomOwners']
-                    holders = data
-                tasks = []
 
-        if tasks:  # Fetch remaining tasks
-            new_data = await asyncio.gather(*tasks)
-            for data in new_data:
-                B['denomOwners'] += data['denomOwners']
-                holders = data
+    async def total_supply_native(self):
+        for token in self.memecoin:
+            if token['name'] == "Pedro" or token["name"] == "Shroom" or token["name"] == "Nonja":
+                token["total_supply_native"] = 0
+            else:
+                total_supply = await self.client.fetch_supply_of(denom=token["native"])
+                token["total_supply_native"] = str(float(total_supply["amount"]["amount"])/ 10 ** token['decimal'])
 
-        # Processing and filtering the data concurrently
-        decimal = 6 if native_address in ["factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt",
-                                          "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA",
-                                          "factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi",
-                                          "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS"] else 18
-
-        data_wallet = [
-            {'key': model['address'], 'value': int(model['balance']['amount']) / 10 ** decimal}
-            for model in B['denomOwners']
-            if int(model['balance']['amount']) / 10 ** decimal > 0
-        ]
-
-        df_holder_native = pd.DataFrame(data_wallet)
         
-        return df_holder_native
-    
-    async def fetch_holders_cw20_token(self, cw20_address):
-        holders_cw20_wallet = []
-        holders = await self.client.fetch_all_contracts_state(address=cw20_address, pagination=PaginationOption(limit=1000))
+    async def burn_supply_native(self):
+        all_bank_balances = await self.client.fetch_bank_balances(address="inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49")
+        
+        def get_token_details(native_denom):
+            for token in self.memecoin:
+                if token["native"] == native_denom:
+                    return token
+            return None
 
-        if holders is None:
-            return
+        for balance in all_bank_balances.get('balances', []):
+            token_details = get_token_details(balance['denom'])
 
-        A = holders
-        while A['pagination']['nextKey']:
-            pagination = PaginationOption(limit=1000, encoded_page_key=A['pagination']['nextKey'])
-            holders = await self.client.fetch_all_contracts_state(address=cw20_address, pagination=pagination)
-            A['models'] += holders['models']
-            A['pagination'] = holders['pagination']
+            if token_details:
+                token_details['total_burn_native'] = str(float(balance['amount']) / 10 ** token_details['decimal'])
 
-        for model in A['models']:
-            try:
-                amount_Coin = int(base64.b64decode(model['value']).decode('utf-8').strip('"')) / 1e18
-                inj_address = base64.b64decode(model['key']).decode('utf-8')[9:]
+    async def total_and_burn_supply_cw20(self):
+        cw20_tokens = [token for token in self.memecoin if token['cw20'] != "none"]
 
-                if amount_Coin != 0:
-                    holders_cw20_wallet.append({'key': inj_address, 'value': amount_Coin})
+        for token in cw20_tokens:
+            total_supply = 0
+            burn_coin = 0
+            holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=PaginationOption(limit=1000))
 
-            except (ValueError, json.JSONDecodeError):
+            first_fetch = holders
+            while holders['pagination']['nextKey']:
+                pagination = PaginationOption(limit=1000, encoded_page_key=holders['pagination']['nextKey'])
+                holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=pagination)
+                first_fetch['models'] += holders['models']
+                first_fetch['pagination'] = holders['pagination']
+
+            for model in first_fetch['models']:
+                value_decoded = base64.b64decode(model['value']).decode('utf-8').strip('"')
+
+                if value_decoded.isdigit():
+                    amount_coin = float(value_decoded) / 10 ** 18
+
+                    total_supply += amount_coin
+                    
+                    inj_address = base64.b64decode(model['key']).decode('utf-8')[9:]
+
+                    if inj_address == "inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49" or inj_address == token['cw20']:
+                        burn_coin += amount_coin
+
+
+                    token['total_supply_cw20'] = total_supply
+                    token['total_burn_cw20'] = burn_coin                      
+
+
+    async def mintable(self):
+        for token in self.memecoin:
+            metadata = await self.client.fetch_denom_authority_metadata(creator=token['creator'], sub_denom=token['denom'])
+            admin = metadata.get('authorityMetadata', {}).get('admin', '')
+            mintable = 'No' if admin == 'inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49' or admin == 'inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk' else 'Yes'
+            
+            token['mintable'] = mintable
+
+    async def circulation_supply(self):
+        await self.fetch_dex_info()
+        await self.mintable()
+        await self.total_supply_native()
+        await self.burn_supply_native()
+        await self.total_and_burn_supply_cw20()
+
+        total_market_cap = 0
+
+        for token in self.memecoin:
+            total_burn_native = float(token.get('total_burn_native', 0))
+            total_burn_cw20 = float(token.get('total_burn_cw20', 0))
+            total_supply_native = float(token.get('total_supply_native', 0))
+            total_supply_cw20 = float(token.get('total_supply_cw20', 0))
+
+            token['total_burn'] = total_burn_native + total_burn_cw20
+            token['total_supply'] = total_supply_native + total_supply_cw20
+            token['circulation_supply'] = token['total_supply'] - token['total_burn']
+            if token['price_usd']=="Nan":
+                token['market_cap'] = "Nan"
+            else:
+                token['market_cap'] = token['circulation_supply'] * float(token.get('price_usd', 0))
+
+            token['time'] = datetime.now().strftime('%d-%m-%Y %H:%M')
+            token['total_token'] = len(self.memecoin)
+            
+            if token['market_cap'] == "Nan": 
                 continue
+            else:
+                total_market_cap += token['market_cap']
+
+
+        for token in self.memecoin:
+            token['total_market_cap'] = total_market_cap
         
-        df_holders_cw20 = pd.DataFrame(holders_cw20_wallet)
-        return df_holders_cw20
-
-    async def fetch_holders(self, cw20_address, native_address):
-        if cw20_address == "no_cw20":
-            df_holders_native = await self.fetch_holder_native_token(native_address)
-            df_holders_native.rename(columns={'value': 'native_value'}, inplace=True)
-            
-            # Creating a dummy dataframe for cw20 with the same keys and default values
-            df_holders_cw20 = df_holders_native.copy()
-            df_holders_cw20['cw20_value'] = 0
-            df_holders_cw20 = df_holders_cw20.drop(columns=['native_value'])
-            
-        else:
-            df_holders_native = await self.fetch_holder_native_token(native_address)
-            df_holders_cw20 = await self.fetch_holders_cw20_token(cw20_address)
-            df_holders_cw20.rename(columns={'value': 'cw20_value'}, inplace=True)
-            df_holders_native.rename(columns={'value': 'native_value'}, inplace=True)
-
-        # Merging dataframes
-        merged_df = pd.merge(df_holders_native, df_holders_cw20, on='key', how='outer')
-        merged_df.fillna(0, inplace=True)
-
-        # Calculating total value and percentage
-        merged_df['total_value'] = merged_df['native_value'] + merged_df['cw20_value']
-        total_supply = merged_df['total_value'].sum()
-        merged_df['percentage'] = (merged_df['total_value'] / total_supply) * 100
-
-        # Sorting and formatting the dataframe
-        merged_df = merged_df.sort_values(by='total_value', ascending=False)
-        merged_df = merged_df.round({'total_value': 0, 'percentage': 5, 'native_value': 0, 'cw20_value': 0})
-        merged_df = merged_df.reset_index(drop=True)
-        merged_df['Top'] = merged_df.index + 1
-
-        burn_addresses = [
-            'inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49',
-            'inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm',
-            'inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8',
-            'inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck',
-        ]
-
-        creator_addresses = {
-            'inj1x6u08aa3plhk3utjk7wpyjkurtwnwp6dhudh0j': 'Creator Pedro',
-            'inj1y43urcm8w0vzj74ys6pwl422qtd0a278hqchw8': 'Future Pedro',
-            'inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64': 'Creator Qunt',
-            'inj1pr5lyuez8ak94tpuz9fs7dkpst7pkc9uuhfhvm': 'Creator Shroom',
-            'inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq': 'Creator Kira',
-            'inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc': 'Creator FFI',
-            'inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89': 'Creator Drugs',
-            'inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm': 'Creator Sai'
-        }
-
-        pool_addresses = {
-            'inj15ckgh6kdqg0x5p7curamjvqrsdw4cdzz5ky9v6': 'Pool Pedro/Inj',
-            'inj13t5f8yvlsxxnwyz9d7fdc9ahduhxcf45qlm8xt': 'Pool Pedro/Dojo',
-            'inj1r7ahhyfe35l04ffa5gnzsxjkgmnn9jkd5ds0vg': 'Pool Nonja/Inj',
-            'inj1eswdzx773we5zu2mz0zcmm7l5msr8wcss8ek0f': 'Pool Kira/Inj',
-            'inj1hrgkrr2fxt4nrp8dqf7acmgrglfarz88qk3sms': 'Pool FFI/Inj',
-            'inj1y6x5kfc5m7vhmy8dfry2vdqsvrnqrnwmw4rea0': 'Pool Drugs/Inj',
-            'inj18nyltfvkyrx4wxfpdd6sn9l8wmqfr6t63y7nse': 'Pool Sai/Shroom',
-            'inj1m35kyjuegq7ruwgx787xm53e5wfwu6n5uadurl': 'Pool Shroom/Inj',
-        }
-
-        merged_df['info'] = merged_df['key'].apply(
-            lambda x: 'Burn Address' if x in burn_addresses else creator_addresses.get(x, pool_addresses.get(x, '-'))
-        )
-
-
-        filtered_df = merged_df[~merged_df['key'].isin(burn_addresses + list(pool_addresses.keys()))]
-
-        top_10_sum = round(filtered_df['percentage'].nlargest(10).sum())
-        top_20_sum = round(filtered_df['percentage'].nlargest(20).sum())
-        top_50_sum = round(filtered_df['percentage'].nlargest(50).sum())
-
-        print(top_10_sum)
-        print(top_20_sum)
-        print(top_50_sum)
-
-        if native_address == "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt":
-
-            # Calculate the sum of all removed rows
-            removed_sum_native = merged_df[merged_df['total_value'] <= 2]['native_value'].sum()
-            removed_sum_cw20 = merged_df[merged_df['total_value'] <= 2]['cw20_value'].sum()
-
-            # Calculate the percentage for the new row
-            total_supply = merged_df['total_value'].sum()
-            percentage = (removed_sum_native / total_supply) * 100
-
-            # Find the current lowest 'Top' value and add 1
-            lowest_top = merged_df['Top'].max() + 1
-
-            # Create the new row as a dataframe
-            new_row = pd.DataFrame({
-                'key': ['lower than 2 Qunt'],
-                'native_value': [removed_sum_native],
-                'cw20_value': [removed_sum_cw20],
-                'total_value': [removed_sum_native + removed_sum_cw20],
-                'percentage': [percentage],
-                'Top': [lowest_top],
-                'info': ['-']
-            })
-
-            merged_df = merged_df[merged_df['total_value'] >= 3]
-            merged_df = pd.concat([merged_df, new_row], ignore_index=True)
-
-        print(merged_df)
-
-
-
-        current_time = datetime.now().strftime('%d-%m-%Y %H:%M')
-        total_holders = len(merged_df)
-        dict_holders = {
-            "timestamp": current_time,
-            "totalholders": total_holders,
-            "top_10": top_10_sum,
-            "top_20": top_20_sum,
-            "top_50": top_50_sum,
-            "holders": merged_df.to_dict('records')
-        }
-
-        # Convert dict_holders to MessagePack format
-        msgpack_data = msgpack.packb(dict_holders, use_bin_type=True)
-
-        return msgpack_data
+        return self.memecoin
