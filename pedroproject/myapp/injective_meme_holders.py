@@ -1,4 +1,5 @@
 import base64
+import msgpack
 from datetime import datetime
 import json
 import asyncio
@@ -168,6 +169,11 @@ class InjectiveHolders:
             "top_50": top_50_sum,
             "holders": merged_df.to_dict('records')
         }
-        return dict_holders
+
+        # Convert dict_holders to MessagePack format
+        msgpack_data = msgpack.packb(dict_holders, use_bin_type=True)
+
+        return msgpack_data
+
 
 
