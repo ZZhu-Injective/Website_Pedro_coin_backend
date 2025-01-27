@@ -13,8 +13,8 @@ import aiohttp
 class InjectiveWalletInfo:
     memecoin = [
         {"name": "Pedro", "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm", "cw20": "inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm"},
-        {"name": "Shroom", "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8", "cw20": "none"},
-        {"name": "Nonja", "native": "factory/inj14ejqjy8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck", "cw20": "none"},
+        {"name": "Shroom", "native": "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8", "cw20": "inj1300xcg9naqy00fujsr9r8alwk7dh65uqu87xm8"},
+        {"name": "Nonja", "native": "factory/inj14ejqjy8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck", "cw20": "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck"},
         {"name": "Qunt", "native": "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt", "cw20": "none"},
         {"name": "Kira", "native": "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA", "cw20": "none"},
         {"name": "ffi", "native": "factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi", "cw20": "none"},
@@ -51,41 +51,36 @@ class InjectiveWalletInfo:
         
         return balances
 
-    async def fetch_cw20_balance(self) -> List[dict]:
+    async def fetch_cw20_balance(self):
         cw20_balances = []
+
         cw20_tokens = [token for token in self.memecoin if token['cw20'] != "none"]
 
-        async def fetch_paginated_holders(token):
-            async with self.sem:
-                holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=PaginationOption(limit=1000))
-                all_models = holders['models']
-                while holders['pagination']['nextKey']:
-                    pagination = PaginationOption(limit=1000, encoded_page_key=holders['pagination']['nextKey'])
-                    holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=pagination)
-                    all_models.extend(holders['models'])
-                return all_models
+        for token in cw20_tokens:
+            holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=PaginationOption(limit=1000))
 
-        async def process_token(token):
-            try:
-                all_models = await fetch_paginated_holders(token)
-                return [
-                    {
-                        'denom': token['native'],
-                        'amount': int(base64.b64decode(model['value']).decode('utf-8').strip('"')) / 1e18
-                    }
-                    for model in all_models
-                    if self.address in base64.b64decode(model['key']).decode('utf-8')
-                ]
-            except Exception:
-                return []
+            first_fetch = holders
+            while holders['pagination']['nextKey']:
+                pagination = PaginationOption(limit=1000, encoded_page_key=holders['pagination']['nextKey'])
+                holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=pagination)
+                first_fetch['models'] += holders['models']
+                first_fetch['pagination'] = holders['pagination']
 
-        tasks = [process_token(token) for token in cw20_tokens]
-        results = await asyncio.gather(*tasks)
+            for model in first_fetch['models']:
+                try:
+                    value_decoded = base64.b64decode(model['value']).decode('utf-8').strip('"')
 
-        for result in results:
-            cw20_balances.extend(result)
-
-        return cw20_balances
+                    if value_decoded.isdigit():
+                        amount_Coin = int(value_decoded) / 1e18
+                        inj_address = base64.b64decode(model['key']).decode('utf-8')[9:]
+                        
+                        if amount_Coin > 0:
+                            if inj_address == self.address:
+                                cw20_balances.append({'denom': token['native'], 'amount': amount_Coin})
+                except (ValueError, json.JSONDecodeError):
+                    continue
+        
+            return cw20_balances
 
     async def my_wallet(self):
         account_task = self.fetch_account_with_retry()
@@ -100,12 +95,16 @@ class InjectiveWalletInfo:
             amount = float(balance['amount'])
             total_balances[denom] = total_balances.get(denom, 0) + amount
 
+        print(cw20_balances)
+
         return {
             'address': self.address,
             'clicks': 100,
             'account_number': account.base_account.account_number,
             'transactions': account.base_account.sequence,
             'balances': total_balances,
+            'cw20_balances': cw20_balances,
+            'native_balances': bank_balances,
             'holding': len(total_balances),
             'time': datetime.now().strftime('%d-%m-%Y %H:%M')
         }
