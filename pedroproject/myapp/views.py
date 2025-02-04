@@ -6,11 +6,17 @@ from .injective_token_info import InjectiveTokenInfo
 from .injective_meme_holders import InjectiveHolders
 from .injective_nft_holders import InjectiveHolders2
 from .injective_login import InjectiveLogin
+from .injective_cw20_token import InjectiveCw20
 
 
 async def wallet_info_view(request, address):
     wallet = InjectiveWalletInfo(address)
     balance = await wallet.my_wallet()
+    return JsonResponse(balance, safe=False)
+
+async def Injective_cw20(request, address):
+    amount = InjectiveCw20(address)
+    balance = await amount.fetch_cw20_balance()
     return JsonResponse(balance, safe=False)
 
 async def token_info_view(request):
@@ -22,7 +28,6 @@ async def token_holders_view(request, native_address, cw20_address):
     token = InjectiveHolders()
     info = await token.fetch_holders(cw20_address=cw20_address, native_address=native_address)
     return HttpResponse(info, content_type='application/x-msgpack')
-
 
 async def nft_holders_view(request, cw20_address):
     nft = InjectiveHolders2()
