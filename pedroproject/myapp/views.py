@@ -7,7 +7,8 @@ from .injective_meme_holders import InjectiveHolders
 from .injective_nft_holders import InjectiveHolders2
 from .injective_login import InjectiveLogin
 from .injective_cw20_token import InjectiveCw20
-
+from .injective_coin_drop import CoinDrop
+from .injective_nft_drop import NFTDrop
 
 async def wallet_info_view(request, address):
     wallet = InjectiveWalletInfo(address)
@@ -37,6 +38,16 @@ async def nft_holders_view(request, cw20_address):
 async def check_wallet(request, address):
     check = InjectiveLogin(address=address)
     info = await check.check_total_balance()
+    return JsonResponse(info, safe=False)
+
+async def native_holders(request, native_address):
+    token = CoinDrop()
+    info = await token.fetch_holders(native_address=native_address)
+    return JsonResponse(info, safe=False)
+
+async def nft_holders(request, cw20):
+    nft = NFTDrop()
+    info = nft.fetch_holder_nft(cw20_address=cw20)
     return JsonResponse(info, safe=False)
 
 def home(request):

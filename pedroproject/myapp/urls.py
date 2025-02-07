@@ -9,4 +9,6 @@ urlpatterns = [
     path('token_holders/<path:native_address>/<path:cw20_address>/', views.token_holders_view, name='token_holders'),
     path('nft_holders/<path:cw20_address>/', views.nft_holders_view, name='nft_holders'),
     path('check/<path:address>/', views.check_wallet, name='check_wallet'),
+    path('naholders/<path:native_address>/', views.native_holders, name='native_holders'),
+    path('nfholders/<path:cw20>/', views.nft_holders, name='nft_holders'),
 ]
