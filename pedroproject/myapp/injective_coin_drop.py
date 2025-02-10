@@ -59,9 +59,11 @@ class CoinDrop:
         df_holders_native = await self.fetch_holder_native_token(native_address)
         total_supply = df_holders_native['value'].sum()
         df_holders_native['percentage'] = (df_holders_native['value'] / total_supply) * 100
+
+        df_holders_native = df_holders_native.rename(columns={'key': 'owner', 'value': 'total'})
                 
         dict_holders = {
-            "holders": df_holders_native
+            "holders": df_holders_native.to_dict(orient='records')
         }
 
         print(dict_holders)

@@ -6,6 +6,7 @@ import json
 from pyinjective.async_client import AsyncClient
 from pyinjective.client.model.pagination import PaginationOption
 from pyinjective.core.network import Network
+from django.http import JsonResponse
 
 class NFTDrop:
 
@@ -57,17 +58,9 @@ class NFTDrop:
         df['percentage'] = (df['total'] / total_supply) * 100
 
         dict_holders = {
-            "holders": df
+            "holders": df.to_dict(orient='records')
         }
 
         print(dict_holders)
 
         return dict_holders
-
-async def main():
-    cw20_address = "inj1ca3cfgkesnf0qmeh063nfpvwk6hlgv799l9mwk"
-    injective = NFTDrop()
-    await injective.fetch_holder_nft(cw20_address)
-
-if __name__ == "__main__":
-    asyncio.run(main())
