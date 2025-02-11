@@ -85,7 +85,7 @@ class InjectiveTokenInfo:
             "name": "xiii",
             "native": "factory/inj18flmwwaxxqj8m8l5zl8xhjrnah98fcjp3gcy3e/XIII",
             "cw20": "none",
-            "denom": "SAI",
+            "denom": "XIII",
             "pool": "inj1eswdzx773we5zu2mz0zcmm7l5msr8wcss8ek0f",
             "creator": "inj18flmwwaxxqj8m8l5zl8xhjrnah98fcjp3gcy3e",
             "decimal": 6,

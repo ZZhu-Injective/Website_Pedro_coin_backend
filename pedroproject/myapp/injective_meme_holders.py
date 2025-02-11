@@ -140,6 +140,7 @@ class InjectiveHolders:
             'inj1y6x5kfc5m7vhmy8dfry2vdqsvrnqrnwmw4rea0': 'Pool Drugs/Inj',
             'inj18nyltfvkyrx4wxfpdd6sn9l8wmqfr6t63y7nse': 'Pool Sai/Shroom',
             'inj1m35kyjuegq7ruwgx787xm53e5wfwu6n5uadurl': 'Pool Shroom/Inj',
+            'inj14vnmw2wee3xtrsqfvpcqg35jg9v7j2vdpzx0kk': 'Pool Mito'
         }
 
         merged_df['info'] = merged_df['key'].apply(
