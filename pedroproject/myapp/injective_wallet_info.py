@@ -19,7 +19,8 @@ class InjectiveWalletInfo:
         {"name": "Kira", "native": "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA", "cw20": "none"},
         {"name": "ffi", "native": "factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi", "cw20": "none"},
         {"name": "drugs", "native": "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS", "cw20": "none"},
-        {"name": "sai", "native": "factory/inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm/SAI", "cw20": "none"}
+        {"name": "sai", "native": "factory/inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm/SAI", "cw20": "none"},
+        {"name": "Xiii", "native": "factory/inj18flmwwaxxqj8m8l5zl8xhjrnah98fcjp3gcy3e/XIII", "cw20": "none"},
     ]
 
     def __init__(self, address):
@@ -46,7 +47,7 @@ class InjectiveWalletInfo:
             denom = balance['denom']
             token = native_tokens.get(denom)
             if token:
-                decimal = 6 if denom in {"factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt", "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA", "factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi", "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS"} else 18
+                decimal = 6 if denom in {"factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt", "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA", "factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi", "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS", "factory/inj18flmwwaxxqj8m8l5zl8xhjrnah98fcjp3gcy3e/XIII"} else 18
                 balances.append({'denom': denom, 'amount': float(balance['amount']) / 10**decimal})
         
         return balances

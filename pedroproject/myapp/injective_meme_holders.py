@@ -28,24 +28,24 @@ class InjectiveHolders:
 
         while holders['pagination']['nextKey']:
             tasks.append(fetch_page(holders['pagination']['nextKey']))
-            if len(tasks) >= 1:  # Adjust batch size as needed
+            if len(tasks) >= 1: 
                 new_data = await asyncio.gather(*tasks)
                 for data in new_data:
                     B['denomOwners'] += data['denomOwners']
                     holders = data
                 tasks = []
 
-        if tasks:  # Fetch remaining tasks
+        if tasks: 
             new_data = await asyncio.gather(*tasks)
             for data in new_data:
                 B['denomOwners'] += data['denomOwners']
                 holders = data
 
-        # Processing and filtering the data concurrently
         decimal = 6 if native_address in ["factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt",
                                           "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA",
                                           "factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi",
-                                          "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS"] else 18
+                                          "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS",
+                                          "factory/inj18flmwwaxxqj8m8l5zl8xhjrnah98fcjp3gcy3e/XIII"] else 18
 
         data_wallet = [
             {'key': model['address'], 'value': int(model['balance']['amount']) / 10 ** decimal}
@@ -90,7 +90,6 @@ class InjectiveHolders:
             df_holders_native = await self.fetch_holder_native_token(native_address)
             df_holders_native.rename(columns={'value': 'native_value'}, inplace=True)
             
-            # Creating a dummy dataframe for cw20 with the same keys and default values
             df_holders_cw20 = df_holders_native.copy()
             df_holders_cw20['cw20_value'] = 0
             df_holders_cw20 = df_holders_cw20.drop(columns=['native_value'])
@@ -101,16 +100,13 @@ class InjectiveHolders:
             df_holders_cw20.rename(columns={'value': 'cw20_value'}, inplace=True)
             df_holders_native.rename(columns={'value': 'native_value'}, inplace=True)
 
-        # Merging dataframes
         merged_df = pd.merge(df_holders_native, df_holders_cw20, on='key', how='outer')
         merged_df.fillna(0, inplace=True)
 
-        # Calculating total value and percentage
         merged_df['total_value'] = merged_df['native_value'] + merged_df['cw20_value']
         total_supply = merged_df['total_value'].sum()
         merged_df['percentage'] = (merged_df['total_value'] / total_supply) * 100
 
-        # Sorting and formatting the dataframe
         merged_df = merged_df.sort_values(by='total_value', ascending=False)
         merged_df = merged_df.round({'total_value': 0, 'percentage': 5, 'native_value': 0, 'cw20_value': 0})
         merged_df = merged_df.reset_index(drop=True)
@@ -131,7 +127,8 @@ class InjectiveHolders:
             'inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq': 'Creator Kira',
             'inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc': 'Creator FFI',
             'inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89': 'Creator Drugs',
-            'inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm': 'Creator Sai'
+            'inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm': 'Creator Sai',
+            'inj18flmwwaxxqj8m8l5zl8xhjrnah98fcjp3gcy3e': 'Creator XIII'
         }
 
         pool_addresses = {

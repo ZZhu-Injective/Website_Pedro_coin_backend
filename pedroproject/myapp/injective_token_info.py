@@ -80,6 +80,15 @@ class InjectiveTokenInfo:
             "pool": "inj18nyltfvkyrx4wxfpdd6sn9l8wmqfr6t63y7nse",
             "creator": "inj10aa0h5s0xwzv95a8pjhwluxcm5feeqygdk3lkm",
             "decimal": 18,
+        },
+        {
+            "name": "xiii",
+            "native": "factory/inj18flmwwaxxqj8m8l5zl8xhjrnah98fcjp3gcy3e/XIII",
+            "cw20": "none",
+            "denom": "SAI",
+            "pool": "inj1eswdzx773we5zu2mz0zcmm7l5msr8wcss8ek0f",
+            "creator": "inj18flmwwaxxqj8m8l5zl8xhjrnah98fcjp3gcy3e",
+            "decimal": 6,
         }
     ]
 

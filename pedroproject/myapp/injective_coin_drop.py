@@ -41,7 +41,8 @@ class CoinDrop:
         decimal = 6 if native_address in ["factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt",
                                           "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA",
                                           "factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi",
-                                          "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS"] else 18
+                                          "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS",
+                                          "factory/inj18flmwwaxxqj8m8l5zl8xhjrnah98fcjp3gcy3e/XIII"] else 18
 
         data_wallet = [
             {'key': model['address'], 'value': int(model['balance']['amount']) / 10 ** decimal}
@@ -69,16 +70,6 @@ class CoinDrop:
         print(dict_holders)
 
         return dict_holders
-
-import asyncio
-
-async def main():
-    inj_holders = CoinDrop()
-    native_address = "factory/inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk/inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck" 
-
-    await inj_holders.fetch_holders(native_address)
-    
-asyncio.run(main())
 
 
 
