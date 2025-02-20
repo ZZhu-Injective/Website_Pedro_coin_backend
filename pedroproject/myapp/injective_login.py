@@ -2,11 +2,9 @@ import asyncio
 import base64
 import json
 import backoff
-from datetime import datetime
 from pyinjective.core.network import Network
 from pyinjective.async_client import AsyncClient
 from pyinjective.client.model.pagination import PaginationOption
-
 
 class InjectiveLogin:
 
@@ -76,7 +74,7 @@ class InjectiveLogin:
         cw20_balance = await self.fetch_cw20_balance()
         total_balance = native_balance + cw20_balance
 
-        if total_balance > 4269:
+        if total_balance > 10000:
             return "yes"
         else:
             return "no"

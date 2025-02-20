@@ -160,18 +160,14 @@ class InjectiveHolders:
 
         if native_address == "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt":
 
-            # Calculate the sum of all removed rows
             removed_sum_native = merged_df[merged_df['total_value'] <= 2]['native_value'].sum()
             removed_sum_cw20 = merged_df[merged_df['total_value'] <= 2]['cw20_value'].sum()
 
-            # Calculate the percentage for the new row
             total_supply = merged_df['total_value'].sum()
             percentage = (removed_sum_native / total_supply) * 100
 
-            # Find the current lowest 'Top' value and add 1
             lowest_top = merged_df['Top'].max() + 1
 
-            # Create the new row as a dataframe
             new_row = pd.DataFrame({
                 'key': ['lower than 2 Qunt'],
                 'native_value': [removed_sum_native],
@@ -185,10 +181,6 @@ class InjectiveHolders:
             merged_df = merged_df[merged_df['total_value'] >= 3]
             merged_df = pd.concat([merged_df, new_row], ignore_index=True)
 
-        print(merged_df)
-
-
-
         current_time = datetime.now().strftime('%d-%m-%Y %H:%M')
         total_holders = len(merged_df)
         dict_holders = {
@@ -200,7 +192,6 @@ class InjectiveHolders:
             "holders": merged_df.to_dict('records')
         }
 
-        # Convert dict_holders to MessagePack format
         msgpack_data = msgpack.packb(dict_holders, use_bin_type=True)
 
         return msgpack_data

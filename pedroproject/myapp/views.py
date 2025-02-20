@@ -9,7 +9,7 @@ from .injective_login import InjectiveLogin
 from .injective_cw20_token import InjectiveCw20
 from .injective_coin_drop import CoinDrop
 from .injective_nft_drop import NFTDrop
-from .checker import CSVReader
+from .injective_checker import XLSXReader
 
 async def wallet_info_view(request, address):
     wallet = InjectiveWalletInfo(address)
@@ -52,7 +52,7 @@ async def nft_holders(request, cw20):
     return JsonResponse(info, safe=False)
 
 async def checker(request, address):
-    nft = CSVReader()
+    nft = XLSXReader()
     info = nft.check(wallet=address)
     return JsonResponse(info, safe=False)
 
