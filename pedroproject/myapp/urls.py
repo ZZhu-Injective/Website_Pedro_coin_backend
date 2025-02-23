@@ -12,4 +12,5 @@ urlpatterns = [
     path('naholders/<path:native_address>/', views.native_holders, name='native_holders'),
     path('nfholders/<path:cw20>/', views.nft_holders, name='nft_holders'),
     path('checker/<path:address>/', views.checker, name='checker'),
+    path('talented/', views.talented, name='talented'),
 ]
