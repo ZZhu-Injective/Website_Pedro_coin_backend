@@ -18,7 +18,7 @@ class TalentDataReader:
         required_columns = [
             'time', 'name', 'profile_picture', 'role', 'skills', 'languages', 
             'location', 'education', 'description', 'discord', 'x_link', 
-            'telegram_link', 'email', 'cv_link', 'transaction_link'
+            'telegram_link', 'email', 'cv_link', 'transaction_link', 'rank'
         ]
 
         if len(df.columns) != len(required_columns):
