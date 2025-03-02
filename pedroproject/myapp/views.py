@@ -11,6 +11,7 @@ from .injective_coin_drop import CoinDrop
 from .injective_nft_drop import NFTDrop
 from .injective_checker import XLSXReader
 from .injective_talented import TalentDataReader
+from .injective_scam import ScamDataReader
 
 async def wallet_info_view(request, address):
     wallet = InjectiveWalletInfo(address)
@@ -60,6 +61,11 @@ async def checker(request, address):
 async def talented(request):
     talent = TalentDataReader()
     info = talent.read_excel()
+    return JsonResponse(info, safe=False)
+
+async def scam(request):
+    scam = ScamDataReader()
+    info = scam.read_excel()
     return JsonResponse(info, safe=False)
 
 def home(request):
