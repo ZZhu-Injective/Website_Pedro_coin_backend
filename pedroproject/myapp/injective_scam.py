@@ -16,15 +16,17 @@ class ScamDataReader:
         df = pd.read_excel(self.file_path)
 
         required_columns = [
-            'Injective Addresses', 'Time', 'Amount', 'Reason', 'From', 'Projects'
+            'Address', 'Time', 'Amount', 'Reason', 'From', 'Projects'
         ]
 
         if len(df.columns) != len(required_columns):
             raise ValueError(f"The Excel file must have exactly {len(required_columns)} columns. Found {len(df.columns)} columns instead.")
 
-        df.columns = required_columns
+        df = df[required_columns]
 
         df = df[::-1].reset_index(drop=True)
+
+        print(df)
 
         records = df.to_dict(orient='records')
         for idx, record in enumerate(records, start=1):
