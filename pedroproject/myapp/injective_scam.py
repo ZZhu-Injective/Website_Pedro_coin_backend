@@ -26,8 +26,6 @@ class ScamDataReader:
 
         df = df[::-1].reset_index(drop=True)
 
-        print(df)
-
         records = df.to_dict(orient='records')
         for idx, record in enumerate(records, start=1):
             record['index'] = idx
