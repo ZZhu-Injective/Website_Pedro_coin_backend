@@ -16,7 +16,7 @@ class ScamDataReader:
         df = pd.read_excel(self.file_path)
 
         required_columns = [
-            'Injective Addresses', 'Time', 'Amount'
+            'Injective Addresses', 'Time', 'Amount', 'Reason', 'From', 'Projects'
         ]
 
         if len(df.columns) != len(required_columns):
