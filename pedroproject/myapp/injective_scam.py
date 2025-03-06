@@ -20,7 +20,7 @@ class ScamDataReader:
         ]
 
         if len(df.columns) != len(required_columns):
-            raise ValueError(f"The Excel file must have exactly {len(required_columns)} columns.")
+            raise ValueError(f"The Excel file must have exactly {len(required_columns)} columns. Found {len(df.columns)} columns instead.")
 
         df.columns = required_columns
 
