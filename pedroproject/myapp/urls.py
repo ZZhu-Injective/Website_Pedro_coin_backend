@@ -13,5 +13,6 @@ urlpatterns = [
     path('nfholders/<path:cw20>/', views.nft_holders, name='nft_holders'),
     path('checker/<path:address>/', views.checker, name='checker'),
     path('talented/', views.talented, name='talented'),
+    path('inputscam/', views.scam_check, name='scam_check'),
     path('scam/', views.scam, name='scam'),
 ]
