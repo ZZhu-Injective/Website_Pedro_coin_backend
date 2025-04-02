@@ -28,7 +28,7 @@ class InjectiveWalletInfo:
         self.network = Network.mainnet()
         self.client = AsyncClient(self.network)
         self.session = aiohttp.ClientSession()
-        self.sem = asyncio.Semaphore(10)  # Limit concurrent requests
+        self.sem = asyncio.Semaphore(10) 
 
     @backoff.on_exception(backoff.expo, Exception, max_tries=10)
     async def fetch_account_with_retry(self):
