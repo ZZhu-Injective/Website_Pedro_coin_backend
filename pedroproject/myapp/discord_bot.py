@@ -8,14 +8,13 @@ import signal
 import sys
 
 WEBHOOK_URL = "https://discord.com/api/webhooks/1357004853259403416/SHndHHoJJA5qe_XSlEUQjk7oPf0FmnLPhjB3uzWfLcxhhvAQB_fOLPIaJZYz8Q2wlalH"
-FOLDER_PATH = "/path/to/absolute/pedroproject/myapp/art"
-POST_INTERVAL = 8 * 60 * 60
+FOLDER_PATH = "pedroproject/myapp/art"
+POST_INTERVAL = 3 * 60 * 60
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/var/log/art_bot.log'),
         logging.StreamHandler()
     ]
 )
@@ -84,7 +83,6 @@ class ArtBot:
                     else:
                         logger.warning(f"Failed to post {random_file}")
                 
-                # Sleep until next interval or until signaled
                 for _ in range(POST_INTERVAL):
                     if not self.running:
                         break
