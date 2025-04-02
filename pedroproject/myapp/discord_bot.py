@@ -8,7 +8,7 @@ import signal
 import sys
 
 WEBHOOK_URL = "https://discord.com/api/webhooks/1357004853259403416/SHndHHoJJA5qe_XSlEUQjk7oPf0FmnLPhjB3uzWfLcxhhvAQB_fOLPIaJZYz8Q2wlalH"
-FOLDER_PATH = "pedroproject/myapp/art"
+FOLDER_PATH = "/root/Website_Pedro_coin_backend/pedroproject/myapp/art"
 POST_INTERVAL = 3 * 60 * 60
 
 logging.basicConfig(
