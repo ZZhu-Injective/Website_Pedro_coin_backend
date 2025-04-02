@@ -9,7 +9,7 @@ import sys
 
 WEBHOOK_URL = "https://discord.com/api/webhooks/1357004853259403416/SHndHHoJJA5qe_XSlEUQjk7oPf0FmnLPhjB3uzWfLcxhhvAQB_fOLPIaJZYz8Q2wlalH"
 FOLDER_PATH = "/root/Website_Pedro_coin_backend/pedroproject/myapp/art"
-POST_INTERVAL = 3 * 60 * 60
+POST_INTERVAL = 4 * 60 * 60
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,7 +52,6 @@ class ArtBot:
             
             files = {'file': (os.path.basename(file_path), file_data)}
             payload = {
-                "content": "Random Raccoon Art For You",
                 "username": "Art Bot"
             }
             
