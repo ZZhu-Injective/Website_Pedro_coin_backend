@@ -1,110 +1,167 @@
 import asyncio
 import json
-from os import cpu_count
 import traceback
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from functools import partial
+import time
+import sys
+from typing import List, Dict, Any
+from pyinjective.async_client import AsyncClient
+from pyinjective.core.network import Network
+from pyinjective.client.model.pagination import PaginationOption
 
-def isolated_fetcher(address, tx_num):
-    """Run in separate process to contain crashes"""
-    async def _fetch():
-        from pyinjective.async_client import AsyncClient
-        from pyinjective.core.network import Network
-        
-        client = AsyncClient(Network.mainnet())
+def handle_async_exceptions(loop, context):
+    """Handle exceptions in async tasks"""
+    exc = context.get('exception')
+    if exc:
+        print(f"Async error: {exc}", flush=True)
+        traceback.print_exception(type(exc), exc, exc.__traceback__)
+    else:
+        print(f"Async warning: {context.get('message')}", flush=True)
+
+async def fetch_transactions_with_retry(client, address, pagination, max_retries=3):
+    for attempt in range(max_retries):
         try:
+            print(f"Attempt {attempt + 1} of {max_retries}", flush=True)
             response = await client.fetch_account_txs(
                 address=address,
-                from_number=tx_num,
-                to_number=tx_num
+                pagination=pagination
             )
-            
-            if response and response.get('data'):
-                first_tx = response['data'][0]
-                return {
-                    'tx': tx_num,
-                    'status': 'success',
-                    'data': {
-                        'blockNumber': first_tx.get('blockNumber'),
-                        'hash': first_tx.get('hash'),
-                        'timestamp': first_tx.get('blockTimestamp')
-                    }
-                }
-                
+            return response
         except Exception as e:
-            return {
-                'tx': tx_num,
-                'status': 'error',
-                'error': str(e)
-            }
-            
-        return {
-            'tx': tx_num,
-            'status': 'empty',
-            'error': 'No data'
-        }
-
-    # Create new event loop for the subprocess
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        result = loop.run_until_complete(_fetch())
-    except Exception as e:
-        result = {
-            'tx': tx_num,
-            'status': 'process_error',
-            'error': str(e)
-        }
-    finally:
-        loop.close()
-    return result
+            if attempt == max_retries - 1:
+                raise
+            wait_time = (attempt + 1) * 2
+            print(f"Retrying in {wait_time} seconds...", flush=True)
+            await asyncio.sleep(wait_time)
 
 class InjectiveWalletInfo:
-    def __init__(self, address):
+    def __init__(self, address: str):
         self.address = address
+        self.network = Network.mainnet()
+        self.client = AsyncClient(self.network)
+        
+    async def fetch_all_transactions(self) -> List[Dict[str, Any]]:
+        """Fetch all transactions in bulk with pagination"""
+        all_transactions = []
+        limit = 100
+        skip = 0
+        total_count = None
+        
+        print("Starting transaction fetch...", flush=True)
+        
+        while True:
+            try:
+                print(f"\nFetching {limit} transactions from skip {skip}...", flush=True)
+                
+                pagination = PaginationOption(limit=limit, skip=skip)
+                response = await fetch_transactions_with_retry(
+                    self.client, 
+                    self.address, 
+                    pagination
+                )
+                
+                if not response or not response.get('data'):
+                    print("No more data received", flush=True)
+                    break
+                    
+                print(f"Received {len(response['data'])} transactions", flush=True)
+                all_transactions.extend(response['data'])
+                
+                if total_count is None:
+                    total_count = response.get('pagination', {}).get('total', 0)
+                    print(f"Total transactions available: {total_count}", flush=True)
+                
+                skip += len(response['data'])
+                if skip >= total_count:
+                    print("Fetched all transactions", flush=True)
+                    break
+                    
+                await asyncio.sleep(1)
+                
+            except Exception as e:
+                print(f"\nCritical error: {e}", flush=True)
+                traceback.print_exc()
+                break
+                
+        return all_transactions
 
-    async def get_account_info(self, fetch_all=False):
-        tx_range = range(1, 78)
-        results = []
+    async def get_account_info(self) -> Dict[str, Any]:
+        """Get all account information including transactions"""
+        print(f"\nFetching all transactions for address {self.address}...", flush=True)
         
-        # Use ProcessPoolExecutor to parallelize the work
-        with ProcessPoolExecutor(max_workers=min(8, cpu_count())) as executor:
-            # Prepare tasks
-            futures = {
-                executor.submit(isolated_fetcher, self.address, tx_num): tx_num 
-                for tx_num in tx_range
+        start_time = time.time()
+        try:
+            transactions = await self.fetch_all_transactions()
+        except Exception as e:
+            print(f"Fatal error in get_account_info: {e}", flush=True)
+            traceback.print_exc()
+            return {
+                'success_count': 0,
+                'error_count': 1,
+                'error': str(e),
+                'transactions': []
             }
-            
-            # Process results as they complete
-            for future in as_completed(futures):
-                tx_num = futures[future]
-                try:
-                    result = future.result()
-                    print(f"ℹ️ Result for tx {tx_num}: {result['status']}")
-                    results.append(result)
-                except Exception as e:
-                    print(f"🔥 Error processing tx {tx_num}: {str(e)}")
-                    results.append({
-                        'tx': tx_num,
-                        'status': 'process_error',
-                        'error': str(e)
-                    })
         
-        print("\n✅ All transactions processed")
+        elapsed_time = time.time() - start_time
+        
+        # Process results
+        success_count = len(transactions)
+        error_count = 0
+        
+        print(f"\n✅ Fetched {success_count} transactions in {elapsed_time:.2f} seconds", flush=True)
+        
         return {
-            'success_count': len([r for r in results if r.get('status') == 'success']),
-            'error_count': len([r for r in results if r.get('status') != 'success']),
-            'results': results
+            'success_count': success_count,
+            'error_count': error_count,
+            'transactions': sorted(transactions, key=lambda x: x.get('blockNumber', 0)),
+            'stats': {
+                'total_time': elapsed_time,
+                'transactions_per_second': success_count / elapsed_time if elapsed_time > 0 else 0,
+                'total_available': len(transactions)
+            }
         }
 
-async def main():
-    wallet = InjectiveWalletInfo("inj1y43urcm8w0vzj74ys6pwl422qtd0a278hqchw8")
-    results = await wallet.get_account_info(fetch_all=True)
+async def main_task():
+    try:
+        wallet = InjectiveWalletInfo("inj1y43urcm8w0vzj74ys6pwl422qtd0a278hqchw8")
+        print("Wallet created", flush=True)
+        
+        results = await wallet.get_account_info()
+        print("Fetch completed", flush=True)
+        
+        with open('all_transactions.json', 'w') as f:
+            json.dump(results, f, indent=2)
+        print(f"Saved {results['success_count']} transactions", flush=True)
+        
+    except Exception as e:
+        print(f"Main task failed: {e}", flush=True)
+        traceback.print_exc()
+
+def main():
+    # Configure event loop policy for Windows
+    if sys.platform == 'win32':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     
-    # Save results to file for analysis
-    with open('tx_results.json', 'w') as f:
-        json.dump(results, f, indent=2)
-    print("Results saved to tx_results.json")
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.set_exception_handler(handle_async_exceptions)
+    
+    try:
+        print("Starting script...", flush=True)
+        loop.run_until_complete(main_task())
+    except KeyboardInterrupt:
+        print("\nInterrupted by user", flush=True)
+    except Exception as e:
+        print(f"Fatal error: {e}", flush=True)
+        traceback.print_exc()
+    finally:
+        print("Cleaning up...", flush=True)
+        tasks = asyncio.all_tasks(loop)
+        for t in tasks:
+            t.cancel()
+        loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+        loop.close()
+        print("Script ended", flush=True)
+        input("Press Enter to close...")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

@@ -1,41 +1,14 @@
 {
-  "success_count": 16,
-  "error_count": 61,
+  "success_count": 39,
+  "error_count": 38,
   "results": [
     {
-      "tx": 8,
+      "tx": 1,
       "status": "success",
       "data": {
-        "blockNumber": "94390279",
-        "hash": "0x12e38430cddadcc7ca2e850b0126b75396ffe35b50b408b259cbb0a2eb0e604c",
-        "timestamp": "2024-11-13 06:20:08.195 +0000 UTC"
-      }
-    },
-    {
-      "tx": 5,
-      "status": "success",
-      "data": {
-        "blockNumber": "94343347",
-        "hash": "0x1c663801579a811ba34f1b50b2429e00c52d6a79c23566da5a3321d8a9530865",
-        "timestamp": "2024-11-12 20:48:28.418 +0000 UTC"
-      }
-    },
-    {
-      "tx": 6,
-      "status": "success",
-      "data": {
-        "blockNumber": "94343416",
-        "hash": "0xe740e2d6a1f34c716e9d5d994a4753edc58288dc31df93af0f9db4f6c876bc50",
-        "timestamp": "2024-11-12 20:49:14.686 +0000 UTC"
-      }
-    },
-    {
-      "tx": 4,
-      "status": "success",
-      "data": {
-        "blockNumber": "94342927",
-        "hash": "0x104ea798bcc0052959bd2c5c7ba198f05e4409e77a5e1620a9900db0c80057c5",
-        "timestamp": "2024-11-12 20:43:40.091 +0000 UTC"
+        "blockNumber": "91849095",
+        "hash": "0x17e1f488ab829c00c8ea191e27e7cee1b864ee5ce8eb07abc3d5a75105a8b062",
+        "timestamp": "2024-10-25 02:40:38.009 +0000 UTC"
       }
     },
     {
@@ -57,6 +30,33 @@
       }
     },
     {
+      "tx": 4,
+      "status": "success",
+      "data": {
+        "blockNumber": "94342927",
+        "hash": "0x104ea798bcc0052959bd2c5c7ba198f05e4409e77a5e1620a9900db0c80057c5",
+        "timestamp": "2024-11-12 20:43:40.091 +0000 UTC"
+      }
+    },
+    {
+      "tx": 5,
+      "status": "success",
+      "data": {
+        "blockNumber": "94343347",
+        "hash": "0x1c663801579a811ba34f1b50b2429e00c52d6a79c23566da5a3321d8a9530865",
+        "timestamp": "2024-11-12 20:48:28.418 +0000 UTC"
+      }
+    },
+    {
+      "tx": 6,
+      "status": "success",
+      "data": {
+        "blockNumber": "94343416",
+        "hash": "0xe740e2d6a1f34c716e9d5d994a4753edc58288dc31df93af0f9db4f6c876bc50",
+        "timestamp": "2024-11-12 20:49:14.686 +0000 UTC"
+      }
+    },
+    {
       "tx": 7,
       "status": "success",
       "data": {
@@ -66,13 +66,25 @@
       }
     },
     {
-      "tx": 1,
+      "tx": 8,
       "status": "success",
       "data": {
-        "blockNumber": "91849095",
-        "hash": "0x17e1f488ab829c00c8ea191e27e7cee1b864ee5ce8eb07abc3d5a75105a8b062",
-        "timestamp": "2024-10-25 02:40:38.009 +0000 UTC"
+        "blockNumber": "94390279",
+        "hash": "0x12e38430cddadcc7ca2e850b0126b75396ffe35b50b408b259cbb0a2eb0e604c",
+        "timestamp": "2024-11-13 06:20:08.195 +0000 UTC"
       }
+    },
+    {
+      "tx": 9,
+      "status": "process_error",
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
+    },
+    {
+      "tx": 10,
+      "status": "process_error",
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 11,
@@ -84,12 +96,12 @@
       }
     },
     {
-      "tx": 10,
+      "tx": 12,
       "status": "success",
       "data": {
-        "blockNumber": "94473946",
-        "hash": "0x687813b12da61091f59379ce720b290d60fef538a36b39d8c70671d630985134",
-        "timestamp": "2024-11-13 22:48:07.809 +0000 UTC"
+        "blockNumber": "96547954",
+        "hash": "0xce67bac66740e9ae9f81d502bf7fa855d464ac0a76655e3a2b3d1d8e40d19a0c",
+        "timestamp": "2024-11-30 00:20:37.592 +0000 UTC"
       }
     },
     {
@@ -99,6 +111,15 @@
         "blockNumber": "96587392",
         "hash": "0x601610c81de91ad226582b9529421e3b1ca880b44c6b586feae87b20b2333068",
         "timestamp": "2024-11-30 07:25:45.278 +0000 UTC"
+      }
+    },
+    {
+      "tx": 14,
+      "status": "success",
+      "data": {
+        "blockNumber": "96587791",
+        "hash": "0x8fe0448b35436394cc5337b5cb06dd91daf9911a2c677de484210938404555ed",
+        "timestamp": "2024-11-30 07:30:00.233 +0000 UTC"
       }
     },
     {
@@ -120,336 +141,445 @@
       }
     },
     {
-      "tx": 14,
-      "status": "success",
-      "data": {
-        "blockNumber": "96587791",
-        "hash": "0x8fe0448b35436394cc5337b5cb06dd91daf9911a2c677de484210938404555ed",
-        "timestamp": "2024-11-30 07:30:00.233 +0000 UTC"
-      }
-    },
-    {
       "tx": 17,
-      "status": "success",
-      "data": {
-        "blockNumber": "97003201",
-        "hash": "0xa1642023aaa52d5f3c1e866b6966b3f27ba12792ba277f9d0ab3dc2baee6c9ec",
-        "timestamp": "2024-12-03 11:25:17.955 +0000 UTC"
-      }
-    },
-    {
-      "tx": 21,
-      "status": "success",
-      "data": {
-        "blockNumber": "97246355",
-        "hash": "0x753d8cd8e8ef4a590644d414b7f291c4a1f638bdb58b58940a18293b9fb06b7a",
-        "timestamp": "2024-12-05 10:36:18.588 +0000 UTC"
-      }
-    },
-    {
-      "tx": 9,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
-    },
-    {
-      "tx": 12,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "error",
+      "error": "<AioRpcError of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"Received http2 header with status: 502\"\n\tdebug_error_string = \"UNKNOWN:Error received from peer  {created_time:\"2025-04-02T20:03:46.7352465+00:00\", grpc_status:14, grpc_message:\"Received http2 header with status: 502\"}\"\n>",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 25, in _fetch\n    response = await client.fetch_account_txs(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\pyinjective\\async_client.py\", line 1278, in fetch_account_txs\n    return await self.exchange_explorer_api.fetch_account_txs(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\pyinjective\\client\\indexer\\grpc\\indexer_grpc_explorer_api.py\", line 47, in fetch_account_txs\n    response = await self._execute_call(call=self._stub.GetAccountTxs, request=request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\pyinjective\\client\\indexer\\grpc\\indexer_grpc_explorer_api.py\", line 330, in _execute_call\n    return await self._assistant.execute_call(call=call, request=request)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\pyinjective\\utils\\grpc_api_request_assistant.py\", line 16, in execute_call\n    response = await grpc_call\n               ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\grpc\\aio\\_call.py\", line 327, in __await__\n    raise _create_rpc_error(\ngrpc.aio._call.AioRpcError: <AioRpcError of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"Received http2 header with status: 502\"\n\tdebug_error_string = \"UNKNOWN:Error received from peer  {created_time:\"2025-04-02T20:03:46.7352465+00:00\", grpc_status:14, grpc_message:\"Received http2 header with status: 502\"}\"\n>\n"
     },
     {
       "tx": 18,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 19,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 20,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
+    },
+    {
+      "tx": 21,
+      "status": "process_error",
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 22,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 23,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 24,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 25,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 26,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 27,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 28,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 29,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 30,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 31,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 32,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 33,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 34,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 35,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 36,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 37,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 38,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 39,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 40,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 41,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "105715530",
+        "hash": "0x1d4a70087159b885c1d2f9841e7ac87f16f50856184ba32182cdc4d32fb0ad16",
+        "timestamp": "2025-02-12 19:33:51.495 +0000 UTC"
+      }
     },
     {
       "tx": 42,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "106234920",
+        "hash": "0xaa619309d2617a0c2316cf1387f39efb208043a1fcc045a795b51bc2e4325a96",
+        "timestamp": "2025-02-16 23:05:56.883 +0000 UTC"
+      }
     },
     {
       "tx": 43,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "106300228",
+        "hash": "0xde23c53150417983cd98f89eaf4ea0a56ea790c5189733d7e33127429719222e",
+        "timestamp": "2025-02-17 11:47:19.531 +0000 UTC"
+      }
     },
     {
       "tx": 44,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "106312254",
+        "hash": "0xbe53770ad61256488e41b426eaa0ca7b3f60877928acb5423bb508142c761922",
+        "timestamp": "2025-02-17 14:03:26.157 +0000 UTC"
+      }
     },
     {
       "tx": 45,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "106312327",
+        "hash": "0xd15192b81591973df0d849452c898fc9d2972609b14356669f07e32c1a57a29e",
+        "timestamp": "2025-02-17 14:04:15.934 +0000 UTC"
+      }
     },
     {
       "tx": 46,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "106315009",
+        "hash": "0xd3554a43bef925d969af71f7fcb18ae482aaf61f806fd6fb62ce0a717b3e348a",
+        "timestamp": "2025-02-17 14:45:01.562 +0000 UTC"
+      }
     },
     {
       "tx": 47,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "106315888",
+        "hash": "0x9aec65d9b13f8c1de63ff1fbc0b433cb1875b898e8d71f3c98b02a582fc1f6b7",
+        "timestamp": "2025-02-17 14:58:34.786 +0000 UTC"
+      }
     },
     {
       "tx": 48,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "106315966",
+        "hash": "0x3f778de0e0d54956b7ac04ef058b71c9095e12e64dffb73f0eaf52adeca4111f",
+        "timestamp": "2025-02-17 14:59:37.183 +0000 UTC"
+      }
     },
     {
       "tx": 49,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "106316087",
+        "hash": "0xc6cd7c0cb188a7eb63c62ba7e73d6256e5f984a2f4640d784d4ca329150934b0",
+        "timestamp": "2025-02-17 15:01:09.653 +0000 UTC"
+      }
     },
     {
       "tx": 50,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "106316209",
+        "hash": "0xc96ddfad4cbb5e2dddf772de489eb699a7b779334df2e9065d33736de244afb1",
+        "timestamp": "2025-02-17 15:02:44.562 +0000 UTC"
+      }
     },
     {
       "tx": 51,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "106317464",
+        "hash": "0x770812a1b7fa47c49fb050d3722d16e7e55c3a4836b106eff22e4b1ec5e49f6e",
+        "timestamp": "2025-02-17 15:18:13.75 +0000 UTC"
+      }
     },
     {
       "tx": 52,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "106662252",
+        "hash": "0x27d5e7efa70c937a51a60a0dce4c219330e3762dbecc848effccdb72659ba478",
+        "timestamp": "2025-02-20 10:00:51.176 +0000 UTC"
+      }
     },
     {
       "tx": 53,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "106835129",
+        "hash": "0xbe0d9c8c9a1c7dd352d3e28ef9dde10575e43cdc0b29e0c96a631252cd9df0a0",
+        "timestamp": "2025-02-21 19:47:22.719 +0000 UTC"
+      }
     },
     {
       "tx": 54,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "106916646",
+        "hash": "0x0ee2952d7882323204ad4706ee263e0c69a6200b8a129d3577117ab703e738f2",
+        "timestamp": "2025-02-22 11:13:11.907 +0000 UTC"
+      }
     },
     {
       "tx": 55,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "107176023",
+        "hash": "0x6edb541a2aaa05888d1f61be0e8545b22004027bcb52032d3d5f5526ac55f320",
+        "timestamp": "2025-02-24 11:57:42.23 +0000 UTC"
+      }
     },
     {
       "tx": 56,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 57,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 58,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 59,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 60,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 61,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "108133964",
+        "hash": "0x1e892bde0aadabaf9c889e20bbdb42bb2960bb3745453c4e06b81d0aae4d6d11",
+        "timestamp": "2025-03-04 06:17:59.152 +0000 UTC"
+      }
     },
     {
       "tx": 62,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "108135418",
+        "hash": "0xb94ae44261a8db4371d3fccd395adba9642b6cd7b7b2144eb012aa9d8c921837",
+        "timestamp": "2025-03-04 06:36:04.601 +0000 UTC"
+      }
     },
     {
       "tx": 63,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "108334820",
+        "hash": "0xe10da23001de307cce9222527966e73bdfe51016b517058cc0f58e91a26dfe7f",
+        "timestamp": "2025-03-05 20:40:41.073 +0000 UTC"
+      }
     },
     {
       "tx": 64,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 65,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 66,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 67,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 68,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 69,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 70,
       "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "error": "A process in the process pool was terminated abruptly while the future was running or pending.",
+      "traceback": "Traceback (most recent call last):\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"c:\\Users\\zonwi\\Documents\\GitHub\\Website_Pedro_coin_backend\\pedroproject\\myapp\\injective_address.py\", line 95, in get_account_info\n    result = future.result()\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\zonwi\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\concurrent\\futures\\_base.py\", line 401, in __get_result\n    raise self._exception\nconcurrent.futures.process.BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.\n"
     },
     {
       "tx": 71,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "110781425",
+        "hash": "0x9681e754c7a4d0091987a773cb9bdffadd9889983713ee96d9aa3e0c676d8192",
+        "timestamp": "2025-03-24 12:49:09.606 +0000 UTC"
+      }
     },
     {
       "tx": 72,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "110781483",
+        "hash": "0x7a6a759d6776dd1e4868c6a4066ea038712d76493524c8369689ea5d296e067d",
+        "timestamp": "2025-03-24 12:49:46.731 +0000 UTC"
+      }
     },
     {
       "tx": 73,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "110781513",
+        "hash": "0x2a78aa659188929228d583aaf58e08df8b79ee969f3901590e9c907a43c5051c",
+        "timestamp": "2025-03-24 12:50:05.488 +0000 UTC"
+      }
     },
     {
       "tx": 74,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "110781613",
+        "hash": "0x240e01f53db6e7fd0c9dc6dce1399b5055af30fe4eb241b6f511fb10d5f515a7",
+        "timestamp": "2025-03-24 12:51:10.293 +0000 UTC"
+      }
     },
     {
       "tx": 75,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "111217676",
+        "hash": "0x075f79a7251a4e969ddeb7ead79824a53b47586c727687e6de03cae20f2c6cc1",
+        "timestamp": "2025-03-27 20:09:29.308 +0000 UTC"
+      }
     },
     {
       "tx": 76,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "111713335",
+        "hash": "0x86b8eb98031da74b9b1c52bbc5f3ee0ae1b5b02ca435ada74fc90c7262f4b36a",
+        "timestamp": "2025-03-31 15:19:07.289 +0000 UTC"
+      }
     },
     {
       "tx": 77,
-      "status": "process_error",
-      "error": "A process in the process pool was terminated abruptly while the future was running or pending."
+      "status": "success",
+      "data": {
+        "blockNumber": "111868625",
+        "hash": "0xb2c8e9131065e8fd88eb1b030ec75f4c0395b336536cd63baf8ce924bf96670e",
+        "timestamp": "2025-04-01 19:56:57.747 +0000 UTC"
+      }
     }
   ]
 }
