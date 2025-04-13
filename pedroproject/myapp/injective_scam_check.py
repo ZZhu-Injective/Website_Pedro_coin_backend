@@ -53,7 +53,7 @@ class ScamChecker:
         
             
             webhook.send(
-                content=f"{''} **URGENT: SCAM REPORT**",
+                content=f"{'@everyone'} - **URGENT: SCAM REPORT**",
                 embed=embed,
             )
             
