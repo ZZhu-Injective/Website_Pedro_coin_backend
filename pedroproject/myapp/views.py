@@ -141,7 +141,7 @@ async def scam_check(request):
                 return json_response({'error': 'Missing required fields'}, status=400)
 
             checker = ScamChecker()
-            accepted = await checker.send_scam_report(address, project, info, discord_name, user_id_to_tag="everyone")
+            accepted = await checker.send_scam_report(address, project, info, discord_name)
             return json_response(accepted)
         except json.JSONDecodeError:
             return json_response({'error': 'Invalid JSON data'}, status=400)
