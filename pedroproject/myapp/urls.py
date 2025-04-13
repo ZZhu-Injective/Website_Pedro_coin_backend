@@ -15,4 +15,5 @@ urlpatterns = [
     path('talented/', views.talented, name='talented'),
     path('inputscam/', views.scam_check, name='scam_check'),
     path('scam/', views.scam, name='scam'),
+    path('talendsubmit', views.talent_check, name='talent_check'),
 ]

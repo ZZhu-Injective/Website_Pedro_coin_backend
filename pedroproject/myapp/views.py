@@ -16,6 +16,8 @@ from .injective_checker import XLSXReader
 from .injective_talented import TalentDataReader
 from .injective_scam import ScamDataReader
 from .injective_scam_check import ScamChecker
+from .injective_talent_check import TalentNotifier  
+
 
 # Helper function to return JSON responses
 def json_response(data, status=200):
@@ -148,3 +150,59 @@ async def scam_check(request):
             return json_response({'error': str(e)}, status=500)
     else:
         return json_response({'error': 'Only POST requests are allowed'}, status=405)
+    
+
+@csrf_exempt
+async def talent_check(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body.decode('utf-8'))
+            
+            required_fields = ['name', 'profilePicture', 'role', 'continent', 
+                             'education', 'description', 'injectiveRole', 'cvLink',
+                             'transactionLink']
+            
+            missing_fields = [field for field in required_fields if field not in data]
+            if missing_fields:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Missing required fields: {", ".join(missing_fields)}'
+                }, status=400)
+            
+            # Initialize TalentNotifier
+            notifier = TalentNotifier()
+            
+            # Send notification to Discord
+            notification_result = await notifier.send_talent_submission(data)
+            
+            if notification_result != "OK":
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Failed to send notification to Discord'
+                }, status=500)
+
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Talent submission received and notification sent successfully',
+                'data': {
+                    'name': data.get('name'),
+                    'role': data.get('role')
+                }
+            })
+            
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid JSON data'
+            }, status=400)
+            
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'An error occurred: {str(e)}'
+            }, status=500)
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': 'Only POST requests are allowed'
+    }, status=405)

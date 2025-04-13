@@ -1,167 +1,131 @@
 import asyncio
-import json
-import traceback
-import time
-import sys
-from typing import List, Dict, Any
+import aiohttp
 from pyinjective.async_client import AsyncClient
-from pyinjective.core.network import Network
 from pyinjective.client.model.pagination import PaginationOption
+from pyinjective.composer import Composer
+from pyinjective.core.network import Network
 
-def handle_async_exceptions(loop, context):
-    """Handle exceptions in async tasks"""
-    exc = context.get('exception')
-    if exc:
-        print(f"Async error: {exc}", flush=True)
-        traceback.print_exception(type(exc), exc, exc.__traceback__)
-    else:
-        print(f"Async warning: {context.get('message')}", flush=True)
 
-async def fetch_transactions_with_retry(client, address, pagination, max_retries=3):
-    for attempt in range(max_retries):
+async def fetch_all_transactions(client, composer, address, batch_size=20):
+    all_transactions = []
+    offset = 0
+    total = None
+    retry_count = 0
+    max_retries = 5
+    
+    print(f"\nStarting transaction fetch for {address}...")
+    
+    while retry_count < max_retries:
         try:
-            print(f"Attempt {attempt + 1} of {max_retries}", flush=True)
-            response = await client.fetch_account_txs(
-                address=address,
-                pagination=pagination
-            )
-            return response
-        except Exception as e:
-            if attempt == max_retries - 1:
-                raise
-            wait_time = (attempt + 1) * 2
-            print(f"Retrying in {wait_time} seconds...", flush=True)
-            await asyncio.sleep(wait_time)
-
-class InjectiveWalletInfo:
-    def __init__(self, address: str):
-        self.address = address
-        self.network = Network.mainnet()
-        self.client = AsyncClient(self.network)
-        
-    async def fetch_all_transactions(self) -> List[Dict[str, Any]]:
-        """Fetch all transactions in bulk with pagination"""
-        all_transactions = []
-        limit = 100
-        skip = 0
-        total_count = None
-        
-        print("Starting transaction fetch...", flush=True)
-        
-        while True:
-            try:
-                print(f"\nFetching {limit} transactions from skip {skip}...", flush=True)
-                
-                pagination = PaginationOption(limit=limit, skip=skip)
-                response = await fetch_transactions_with_retry(
-                    self.client, 
-                    self.address, 
-                    pagination
+            print(f"Fetching batch {offset//batch_size + 1} (offset {offset})...")
+            
+            pagination = PaginationOption(limit=batch_size, skip=offset)
+            
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+                response = await client.fetch_account_txs(
+                    address=address,
+                    pagination=pagination,
                 )
+            
+            if not response:
+                print("Empty response received")
+                retry_count += 1
+                await asyncio.sleep(5)
+                continue
                 
-                if not response or not response.get('data'):
-                    print("No more data received", flush=True)
-                    break
-                    
-                print(f"Received {len(response['data'])} transactions", flush=True)
+            if 'paging' in response and total is None:
+                total = int(response['paging']['total'])
+                print(f"Total transactions to fetch: {total}")
+            
+            if 'data' in response:
+                batch_count = len(response['data'])
+                print(f"Found {batch_count} transactions in this batch")
                 all_transactions.extend(response['data'])
                 
-                if total_count is None:
-                    total_count = response.get('pagination', {}).get('total', 0)
-                    print(f"Total transactions available: {total_count}", flush=True)
-                
-                skip += len(response['data'])
-                if skip >= total_count:
-                    print("Fetched all transactions", flush=True)
+                if (total is not None and len(all_transactions) >= total) or batch_count < batch_size:
+                    print("Finished fetching all available transactions")
                     break
                     
-                await asyncio.sleep(1)
-                
-            except Exception as e:
-                print(f"\nCritical error: {e}", flush=True)
-                traceback.print_exc()
-                break
-                
-        return all_transactions
-
-    async def get_account_info(self) -> Dict[str, Any]:
-        """Get all account information including transactions"""
-        print(f"\nFetching all transactions for address {self.address}...", flush=True)
-        
-        start_time = time.time()
-        try:
-            transactions = await self.fetch_all_transactions()
+                offset += batch_size
+                await asyncio.sleep(2)  # Rate limiting
+                retry_count = 0  # Reset on success
+            else:
+                print("No transaction data found in response")
+                retry_count += 1
+                await asyncio.sleep(5)
+            
+        except asyncio.TimeoutError:
+            retry_count += 1
+            print(f"\nTimeout occurred (attempt {retry_count}/{max_retries})")
+            await asyncio.sleep(5)
+        except aiohttp.ClientError as e:
+            retry_count += 1
+            print(f"\nConnection error (attempt {retry_count}/{max_retries}): {str(e)}")
+            await asyncio.sleep(10)
         except Exception as e:
-            print(f"Fatal error in get_account_info: {e}", flush=True)
-            traceback.print_exc()
-            return {
-                'success_count': 0,
-                'error_count': 1,
-                'error': str(e),
-                'transactions': []
-            }
-        
-        elapsed_time = time.time() - start_time
-        
-        # Process results
-        success_count = len(transactions)
-        error_count = 0
-        
-        print(f"\n✅ Fetched {success_count} transactions in {elapsed_time:.2f} seconds", flush=True)
-        
-        return {
-            'success_count': success_count,
-            'error_count': error_count,
-            'transactions': sorted(transactions, key=lambda x: x.get('blockNumber', 0)),
-            'stats': {
-                'total_time': elapsed_time,
-                'transactions_per_second': success_count / elapsed_time if elapsed_time > 0 else 0,
-                'total_available': len(transactions)
-            }
-        }
-
-async def main_task():
-    try:
-        wallet = InjectiveWalletInfo("inj1y43urcm8w0vzj74ys6pwl422qtd0a278hqchw8")
-        print("Wallet created", flush=True)
-        
-        results = await wallet.get_account_info()
-        print("Fetch completed", flush=True)
-        
-        with open('all_transactions.json', 'w') as f:
-            json.dump(results, f, indent=2)
-        print(f"Saved {results['success_count']} transactions", flush=True)
-        
-    except Exception as e:
-        print(f"Main task failed: {e}", flush=True)
-        traceback.print_exc()
-
-def main():
-    # Configure event loop policy for Windows
-    if sys.platform == 'win32':
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+            retry_count += 1
+            print(f"\nUnexpected error (attempt {retry_count}/{max_retries}):")
+            print(f"Type: {type(e).__name__}")
+            print(f"Details: {str(e)}")
+            await asyncio.sleep(5)
     
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.set_exception_handler(handle_async_exceptions)
+    return all_transactions
+
+
+async def main() -> None:
+    print("\nStarting Injective transaction fetcher...")
     
     try:
-        print("Starting script...", flush=True)
-        loop.run_until_complete(main_task())
-    except KeyboardInterrupt:
-        print("\nInterrupted by user", flush=True)
+        network = Network.mainnet()
+        print(f"Network: {network.string()}")
+        
+        # Initialize client with custom session configuration
+        client = AsyncClient(network)
+        composer = Composer(network=network.string())
+        
+        address = "inj14rmguhlul3p30ntsnjph48nd5y2pqx2qwwf4u9"
+        print(f"Address: {address}")
+        
+        all_transactions = await fetch_all_transactions(client, composer, address)
+        
+        print(f"\nTotal transactions fetched: {len(all_transactions)}")
+        
+        if not all_transactions:
+            print("No transactions available or unable to fetch transactions")
+            return
+            
+        # Process first 3 transactions as example
+        print("\nSample transactions:")
+        for tx in all_transactions[:3]:
+            print(f"\nTx Hash: {tx.get('hash', 'N/A')}")
+            print(f"Block Time: {tx.get('blockTimestamp', 'N/A')}")
+            try:
+                messages = composer.unpack_transaction_messages(transaction_data=tx)
+                for i, msg in enumerate(messages, 1):
+                    print(f"  Message {i}: {msg.get('type', 'N/A')}")
+                    if 'value' in msg:
+                        print(f"    From: {msg['value'].get('fromAddress', 'N/A')}")
+                        print(f"    To: {msg['value'].get('toAddress', 'N/A')}")
+                        if 'amount' in msg['value']:
+                            for amt in msg['value']['amount']:
+                                print(f"    Amount: {amt.get('amount', 'N/A')} {amt.get('denom', 'N/A')}")
+            except Exception as e:
+                print(f"Error processing message: {str(e)}")
+                
     except Exception as e:
-        print(f"Fatal error: {e}", flush=True)
-        traceback.print_exc()
+        print(f"\nFatal error in main: {type(e).__name__} - {str(e)}")
     finally:
-        print("Cleaning up...", flush=True)
-        tasks = asyncio.all_tasks(loop)
-        for t in tasks:
-            t.cancel()
-        loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
-        loop.close()
-        print("Script ended", flush=True)
-        input("Press Enter to close...")
+        print("\nScript completed")
+
 
 if __name__ == "__main__":
-    main()
+    print("Script initialization...")
+    try:
+        # Configure event loop policy for Windows if needed
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nProcess interrupted by user")
+    except Exception as e:
+        print(f"\nTop-level error: {type(e).__name__} - {str(e)}")
+    print("Script termination")
