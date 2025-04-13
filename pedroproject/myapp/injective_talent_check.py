@@ -42,7 +42,7 @@ class TalentNotifier:
                     )
             
             webhook.send(
-                content=f"{"@everyone"} - **NEW TALENT SUBMISSION** 🚀",
+                content=f"{"@letsrule.inj"} - **NEW TALENT SUBMISSION** 🚀",
                 embed=embed,
             )
             
