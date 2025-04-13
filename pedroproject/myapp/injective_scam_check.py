@@ -19,7 +19,6 @@ class ScamChecker:
         project: str,
         info: str,
         discord_name: str,
-        user_id_to_tag: Optional[str] = "everyone",
         additional_data: Optional[Dict[str, Any]] = None
     ) -> str:
         try:
