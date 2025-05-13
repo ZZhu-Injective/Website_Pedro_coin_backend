@@ -105,4 +105,5 @@ CORS_ALLOWED_ORIGINS = [
     "https://website-pedro-coin-4-c5aj.vercel.app",
     "http://localhost:3000",
     "https://pedroinjraccoon.online",
+    "https://art.pedroinjraccoon.online",
 ]

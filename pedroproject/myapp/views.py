@@ -4,6 +4,8 @@ from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 
+from .Apedro_verify import PedroLogin
+
 from .injective_wallet_info import InjectiveWalletInfo
 from .injective_token_info import InjectiveTokenInfo
 from .injective_meme_holders import InjectiveHolders
@@ -19,15 +21,29 @@ from .injective_scam_check import ScamChecker
 from .injective_talent_check import TalentNotifier  
 
 
-# Helper function to return JSON responses
 def json_response(data, status=200):
     return JsonResponse(data, safe=False, status=status)
 
-# Home view
 def home(request):
     return render(request, 'home.html')
 
-# Wallet info view
+
+async def verify(request, address):
+    try:
+        check = PedroLogin(address=address)
+        info = await check.check()
+        return json_response(info)
+    except Exception as e:
+        return json_response({'error': str(e)}, status=500)
+
+
+
+
+
+
+
+
+
 async def wallet_info_view(request, address):
     try:
         wallet = InjectiveWalletInfo(address)
@@ -36,7 +52,6 @@ async def wallet_info_view(request, address):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
-# CW20 token balance view
 async def Injective_cw20(request, address):
     try:
         amount = InjectiveCw20(address)
@@ -45,7 +60,6 @@ async def Injective_cw20(request, address):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
-# Token info view
 async def token_info_view(request):
     try:
         token = InjectiveTokenInfo()
@@ -54,7 +68,6 @@ async def token_info_view(request):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
-# Token holders view
 async def token_holders_view(request, native_address, cw20_address):
     try:
         token = InjectiveHolders()
@@ -63,7 +76,6 @@ async def token_holders_view(request, native_address, cw20_address):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
-# NFT holders view
 async def nft_holders_view(request, cw20_address):
     try:
         nft = InjectiveHolders2()
@@ -72,7 +84,6 @@ async def nft_holders_view(request, cw20_address):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
-# Wallet balance check view
 async def check_wallet(request, address):
     try:
         check = InjectiveLogin(address=address)
@@ -81,7 +92,6 @@ async def check_wallet(request, address):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
-# Native token holders view
 async def native_holders(request, native_address):
     try:
         token = CoinDrop()
@@ -90,7 +100,6 @@ async def native_holders(request, native_address):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
-# NFT holders view (alternative)
 async def nft_holders(request, cw20):
     try:
         nft = NFTDrop()
@@ -99,7 +108,6 @@ async def nft_holders(request, cw20):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
-# Wallet checker view
 async def checker(request, address):
     try:
         nft = XLSXReader()
@@ -108,7 +116,6 @@ async def checker(request, address):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
-# Talented data view
 async def talented(request):
     try:
         talent = TalentDataReader()
@@ -117,7 +124,6 @@ async def talented(request):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
-# Scam data view
 async def scam(request):
     try:
         scam = ScamDataReader()
@@ -126,7 +132,6 @@ async def scam(request):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
-# Scam check view (updated to handle POST requests)
 @csrf_exempt
 async def scam_check(request):
     if request.method == 'POST':
@@ -168,10 +173,8 @@ async def talent_check(request):
                     'message': f'Missing required fields: {", ".join(missing_fields)}'
                 }, status=400)
             
-            # Initialize TalentNotifier
             notifier = TalentNotifier()
             
-            # Send notification to Discord
             notification_result = await notifier.send_talent_submission(data)
             
             if notification_result != "OK":

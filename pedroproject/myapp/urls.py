@@ -3,6 +3,10 @@ from . import views
 
 urlpatterns = [
     path('', views.home, name='home'),
+
+
+    path('check/<str:address>/', views.verify, name='verify'),
+
     path('wallet_info/<str:address>/', views.wallet_info_view, name='wallet_info'),
     path('cw20/<str:address>', views.Injective_cw20, name='cw20'),
     path('token_info/', views.token_info_view, name='token_info'),
