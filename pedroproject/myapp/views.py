@@ -1,10 +1,13 @@
+import asyncio
 import json
+import threading
 
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 
 from .Apedro_verify import PedroLogin
+from .Apedro_talent_submission import discord_bot
 
 from .injective_wallet_info import InjectiveWalletInfo
 from .injective_token_info import InjectiveTokenInfo
@@ -18,7 +21,7 @@ from .injective_checker import XLSXReader
 from .injective_talented import TalentDataReader
 from .injective_scam import ScamDataReader
 from .injective_scam_check import ScamChecker
-from .injective_talent_check import TalentNotifier  
+from .injective_talent_check import TalentNotifier
 
 
 def json_response(data, status=200):
@@ -28,6 +31,7 @@ def home(request):
     return render(request, 'home.html')
 
 
+
 async def verify(request, address):
     try:
         check = PedroLogin(address=address)
@@ -35,6 +39,54 @@ async def verify(request, address):
         return json_response(info)
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
+
+
+
+def start_bot_in_thread():
+    discord_bot.start()
+
+if not hasattr(discord_bot, 'bot_thread'):
+    discord_bot.bot_thread = threading.Thread(target=start_bot_in_thread, daemon=True)
+    discord_bot.bot_thread.start()
+
+@csrf_exempt
+async def talent_submit(request, address):
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        
+        if data.get('walletAddress') != address:
+            return JsonResponse({'error': 'Wallet mismatch'}, status=400)
+        
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                discord_bot.post_submission(data),
+                discord_bot.loop
+            )
+            message = future.result(timeout=10)
+            
+            return JsonResponse({
+                'success': True,
+                'message_id': str(message.id)
+            })
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+            
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

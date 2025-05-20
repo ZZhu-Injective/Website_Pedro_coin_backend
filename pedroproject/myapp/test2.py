@@ -1,74 +1,56 @@
-import asyncio
-from pyinjective.async_client import AsyncClient
-from pyinjective.client.model.pagination import PaginationOption
-from pyinjective.core.network import Network
+import discord
+from discord.ext import commands
+from discord.ui import Button, View
 
-async def fetch_transactions(address: str, limit: int = 50, max_transactions: int = 1000):
-    network = Network.mainnet()
-    client = AsyncClient(network)
-    all_transactions = []
-    skip = 0
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# Define your target channel ID here
+TARGET_CHANNEL_ID = 1374018261578027129  # Replace with your actual channel ID
+
+class HiByeButtons(View):
+    def __init__(self):
+        super().__init__(timeout=30)
+        
+        hi_button = Button(label="Hi", style=discord.ButtonStyle.green, emoji="👋")
+        bye_button = Button(label="Bye", style=discord.ButtonStyle.red, emoji="👋")
+        
+        hi_button.callback = self.hi_callback
+        bye_button.callback = self.bye_callback
+        
+        self.add_item(hi_button)
+        self.add_item(bye_button)
     
-        while len(all_transactions) < max_transactions:
-            try:
-                # Add timeout to prevent hanging
-                pagination = PaginationOption(limit=limit, skip=skip)
-                transactions_response = await asyncio.wait_for(
-                    client.fetch_account_txs(address=address, pagination=pagination),
-                    timeout=30
-                )
-                
-                if not transactions_response.data:
-                    break
-                    
-                for tx in transactions_response.data:
-                    # Create a simplified transaction object
-                    simplified_tx = {
-                        'height': tx.get('height'),
-                        'hash': tx.get('hash'),
-                        'timestamp': tx.get('block_unix_timestamp'),
-                        'messages': tx.get('messages'),
-                        'gas_used': tx.get('gasUsed'),
-                        'gas_wanted': tx.get('gasWanted'),
-                        'fee': tx.get('gasFee'),
-                        'tx_type': tx.get('txType'),
-                        'memo': tx.get('memo'),
-                        'code': tx.get('code')
-                    }
-                    all_transactions.append(simplified_tx)
-                
-                print(f"Fetched {len(transactions_response.data)} transactions (total: {len(all_transactions)})")
-                
-                if len(transactions_response.data) < limit:
-                    break
-                    
-                skip += limit
-                
-            except asyncio.TimeoutError:
-                print(f"Timeout after {skip} transactions, continuing...")
-                skip += limit
-                continue
-            except Exception as e:
-                print(f"Error fetching transactions: {e}")
-                break
-                
-        
-    return all_transactions
+    async def hi_callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f"{interaction.user.mention} said Hi back!", ephemeral=True)
+        # Also send to target channel
+        target_channel = bot.get_channel(TARGET_CHANNEL_ID)
+        if target_channel:
+            await target_channel.send(f"{interaction.user.mention} said Hi in {interaction.channel.mention}!")
+    
+    async def bye_callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f"{interaction.user.mention} said Bye!", ephemeral=True)
+        # Also send to target channel
+        target_channel = bot.get_channel(TARGET_CHANNEL_ID)
+        if target_channel:
+            await target_channel.send(f"{interaction.user.mention} said Bye in {interaction.channel.mention}!")
 
-async def main():
-    address = "inj14rmguhlul3p30ntsnjph48nd5y2pqx2qwwf4u9"
-    try:
-        transactions = await fetch_transactions(address)
-        print(f"\nFetched {len(transactions)} total transactions")
-        
-        # Optionally save to file if you have many transactions
-        with open('transactions.json', 'w') as f:
-            import json
-            json.dump(transactions, f, indent=2)
-            
-    except Exception as e:
-        print(f"Main error: {e}")
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user.name} ({bot.user.id})')
+    print('------')
 
-if __name__ == "__main__":
-    # Use asyncio.run() which is the preferred way in Python 3.7+
-    asyncio.run(main())
+@bot.command()
+async def hi(ctx):
+    """Sends a greeting with buttons and logs to target channel"""
+    view = HiByeButtons()
+    await ctx.send("Hello! How would you like to respond?", view=view)
+    
+    # Send to target channel that someone used the command
+    target_channel = bot.get_channel(TARGET_CHANNEL_ID)
+    if target_channel:
+        await target_channel.send(f"{ctx.author.mention} used !hi in {ctx.channel.mention}")
+
+# Use environment variables or a config file for the token
+bot.run('')  # Replace with your actual token
