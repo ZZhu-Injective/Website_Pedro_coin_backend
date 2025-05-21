@@ -8,6 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .Apedro_verify import PedroLogin
 from .Apedro_talent_submission import discord_bot
+from .Apedro_talent_confirmed import TalentDataReaders
 
 from .injective_wallet_info import InjectiveWalletInfo
 from .injective_token_info import InjectiveTokenInfo
@@ -30,8 +31,6 @@ def json_response(data, status=200):
 def home(request):
     return render(request, 'home.html')
 
-
-
 async def verify(request, address):
     try:
         check = PedroLogin(address=address)
@@ -39,8 +38,6 @@ async def verify(request, address):
         return json_response(info)
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
-
-
 
 def start_bot_in_thread():
     discord_bot.start()
@@ -74,7 +71,13 @@ async def talent_submit(request, address):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
     
-
+async def talent(request):
+    try:
+        talent = TalentDataReaders()
+        info = talent.read_approved_talents()
+        return json_response(info)
+    except Exception as e:
+        return json_response({'error': str(e)}, status=500)
 
 
 
@@ -164,14 +167,6 @@ async def checker(request, address):
     try:
         nft = XLSXReader()
         info = await nft.check(wallet=address)
-        return json_response(info)
-    except Exception as e:
-        return json_response({'error': str(e)}, status=500)
-
-async def talented(request):
-    try:
-        talent = TalentDataReader()
-        info = talent.read_excel()
         return json_response(info)
     except Exception as e:
         return json_response({'error': str(e)}, status=500)

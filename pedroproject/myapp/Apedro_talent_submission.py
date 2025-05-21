@@ -5,7 +5,7 @@ from discord.ui import Button, View, Modal, TextInput
 from openpyxl import Workbook, load_workbook
 from datetime import datetime
 import os
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 
 class DiscordBot:
     _instance = None
@@ -43,7 +43,7 @@ class DiscordBot:
                 expected_headers = [
                     "Name", "Role", "Injective Role", "Experience", "Education", 
                     "Location", "Availability", "Monthly Rate", "Skills", "Languages",
-                    "Discord", "Email", "Phone", "Telegram", "LinkedIn", "Github",
+                    "Discord", "Email", "Phone", "Telegram", "X", "Github",
                     "Wallet Address", "Wallet Type", "NFT Holdings", "Token Holdings",
                     "Portfolio", "CV", "Image url", "Bio", "Submission date", "Status"
                 ]
@@ -62,7 +62,7 @@ class DiscordBot:
         headers = [
             "Name", "Role", "Injective Role", "Experience", "Education", "Location",
             "Availability", "Monthly Rate", "Skills", "Languages", "Discord", "Email",
-            "Phone", "Telegram", "LinkedIn", "Github", "Wallet Address", "Wallet Type",
+            "Phone", "Telegram", "X", "Github", "Wallet Address", "Wallet Type",
             "NFT Holdings", "Token Holdings", "Portfolio", "CV", "Image url", "Bio",
             "Submission date", "Status"
         ]
@@ -114,7 +114,7 @@ class DiscordBot:
                 data.get('email', '').strip(),
                 data.get('phone', '').strip(),
                 data.get('telegram', '').strip() or '-',
-                data.get('linkedin', '').strip() or '-',
+                data.get('X', '').strip() or '-',
                 data.get('github', '').strip() or '-',
                 wallet,
                 data.get('walletType', '').strip(),
@@ -259,11 +259,11 @@ class DiscordBot:
         embed.add_field(name="🗣️ Languages", value=languages, inline=True)
         
         contact_info = [
-            f"**Discord:** {submission_data.get('discord', 'N/A')}",
-            f"**Email:** {submission_data.get('email', 'N/A')}",
-            f"**Phone:** {submission_data.get('phone', 'N/A')}",
+            f"**Discord:** {submission_data.get('discord', '-')}",
+            f"**Email:** {submission_data.get('email', '-')}",
+            f"**Phone:** {submission_data.get('phone', '-')}",
             f"**Telegram:** {submission_data.get('telegram', 'N/A') or '-'}",
-            f"**LinkedIn:** {submission_data.get('linkedin', 'N/A') or '-'}",
+            f"**X:** {submission_data.get('X', 'N/A') or '-'}",
             f"**GitHub:** {submission_data.get('github', 'N/A') or '-'}"
         ]
         embed.add_field(name="📩 Contact Info", value="\n".join(contact_info), inline=False)

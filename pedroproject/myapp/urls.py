@@ -7,6 +7,7 @@ urlpatterns = [
 
     path('check_pedro/<str:address>/', views.verify, name='verify'),
     path('talent_submit/<str:address>/', views.talent_submit, name='talent_submit'),
+    path('talent/', views.talent, name='talent'),
 
 
 
@@ -19,7 +20,6 @@ urlpatterns = [
     path('naholders/<path:native_address>/', views.native_holders, name='native_holders'),
     path('nfholders/<path:cw20>/', views.nft_holders, name='nft_holders'),
     path('checker/<path:address>/', views.checker, name='checker'),
-    path('talented/', views.talented, name='talented'),
     path('inputscam/', views.scam_check, name='scam_check'),
     path('scam/', views.scam, name='scam'),
     path('talendsubmit', views.talent_check, name='talent_check'),
