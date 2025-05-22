@@ -106,4 +106,6 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://pedroinjraccoon.online",
     "https://art.pedroinjraccoon.online",
+    "https://job.pedroinjraccoon.online",
+
 ]
