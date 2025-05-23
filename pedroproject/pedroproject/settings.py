@@ -107,5 +107,4 @@ CORS_ALLOWED_ORIGINS = [
     "https://pedroinjraccoon.online",
     "https://art.pedroinjraccoon.online",
     "https://job.pedroinjraccoon.online",
-
 ]
