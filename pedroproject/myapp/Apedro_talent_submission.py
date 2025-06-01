@@ -1,11 +1,13 @@
+import os
 import asyncio
 import discord
 from discord.ext import commands
 from discord.ui import Button, View, Modal, TextInput
 from openpyxl import Workbook, load_workbook
 from datetime import datetime
-import os
 from typing import Dict, Optional
+
+token = os.getenv('DISCORD_BOT_TOKEN')
 
 class DiscordBot:
     _instance = None
@@ -339,7 +341,7 @@ class DiscordBot:
         """Start the Discord bot"""
         async def runner():
             try:
-                await self.bot.start('')
+                await self.bot.start(token)
             except Exception as e:
                 print(f"❌ Bot error: {e}")
                 await self.bot.close()

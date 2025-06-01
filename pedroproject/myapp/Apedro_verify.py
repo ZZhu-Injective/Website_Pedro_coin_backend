@@ -1,4 +1,3 @@
-import asyncio
 import base64
 import json
 import backoff
@@ -8,7 +7,7 @@ from pyinjective.async_client import AsyncClient
 from pyinjective.client.model.pagination import PaginationOption
 
 """
-Check if you hold our token or NFTs!
+Check if you hold our token (100.000) or NFTs (1)!
 """
 
 class PedroLogin:

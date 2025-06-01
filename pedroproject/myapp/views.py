@@ -1,4 +1,5 @@
 import asyncio
+from asyncio.log import logger
 import json
 import threading
 
@@ -9,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .Apedro_verify import PedroLogin
 from .Apedro_talent_submission import discord_bot
 from .Apedro_talent_confirmed import TalentDataReaders
+from .Apedro_burned import PedroTokenBurnNotifier
 
 from .injective_wallet_info import InjectiveWalletInfo
 from .injective_token_info import InjectiveTokenInfo
@@ -79,11 +81,23 @@ async def talent(request):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
+@csrf_exempt
+async def token_burn_notification(request):
+    if request.method != 'POST':
+        return json_response({'error': 'Method not allowed'}, status=405)
 
-
-
-
-
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        print(data)
+        notifier = PedroTokenBurnNotifier()
+        result = await notifier.process_burn_transaction(
+            burn_data=data.get('burn_data', {}),
+        )
+        return json_response({'status': result})
+    
+    except Exception as e:
+        logger.error(f"Burn notification error: {str(e)}", exc_info=True)
+        return json_response({'error': 'Internal server error'}, status=500)
 
 
 
