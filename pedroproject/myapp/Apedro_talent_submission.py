@@ -6,8 +6,9 @@ from discord.ui import Button, View, Modal, TextInput
 from openpyxl import Workbook, load_workbook
 from datetime import datetime
 from typing import Dict, Optional
+from dotenv import load_dotenv
 
-token = os.getenv('DISCORD_BOT_TOKEN')
+load_dotenv()
 
 class DiscordBot:
     _instance = None
@@ -340,6 +341,7 @@ class DiscordBot:
     def start(self):
         """Start the Discord bot"""
         async def runner():
+            token = os.getenv('DISCORD_BOT_TOKEN')
             try:
                 await self.bot.start(token)
             except Exception as e:
