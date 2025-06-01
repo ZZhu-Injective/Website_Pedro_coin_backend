@@ -3,10 +3,12 @@ import asyncio
 import discord
 from discord.ext import commands
 from discord.ui import Button, View, Modal, TextInput
+from dotenv import load_dotenv
 from openpyxl import Workbook, load_workbook
 from datetime import datetime
 from typing import Dict, Optional
 
+load_dotenv()
 token = os.getenv('DISCORD_BOT_TOKEN')
 
 class DiscordBot:
