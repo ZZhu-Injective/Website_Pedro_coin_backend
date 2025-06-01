@@ -84,7 +84,10 @@ class PedroLogin:
 
         df = df.reset_index(drop=True)
 
-        return df[df['owner'] == self.address]        
+        if not df[df['owner'] == self.address].empty:
+            return int(df[df['owner'] == self.address]['total'].values[0])
+        else:
+            return 0
         
 
     async def check(self) -> str:

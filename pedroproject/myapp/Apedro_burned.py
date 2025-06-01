@@ -23,7 +23,7 @@ class PedroTokenBurnNotifier:
             "DISCORD_WEBHOOK_URL", 
             "https://discord.com/api/webhooks/1377592830167482379/6gJQG-6_nNm32t6ReKUTErnIOG5hCi6qSBRMCabb6tGM41_JuaigGYY4zIXsNFUiCcML"
         )
-        self.role_id = "1362554186574594248"
+        self.role_id = "1340790768360755281"
         self.explorer_base_url = "https://explorer.injective.network/transaction"
 
     def _format_amount(self, amount: str) -> str:
