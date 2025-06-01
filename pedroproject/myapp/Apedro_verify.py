@@ -90,19 +90,15 @@ class PedroLogin:
             return 0
         
 
-    async def check(self) -> str:
+    async def check(self) -> dict:
         native_balance = await self.fetch_native_balance()
-        native_nft = await self.fetch_holder_nft()
+        nft_hold_count = await self.fetch_holder_nft()
 
-        wallet = native_nft['owner'].values[0]
-        nft_hold = int(native_nft['total'].values[0])
-        token_hold = round(float(native_balance))
-        
-        check_status = "yes" if (nft_hold > 0) or (token_hold > 100000) else "no"
+        check_status = "yes" if (nft_hold_count > 0) or (native_balance >= 100000) else "no"
 
         return {
-            "wallet": wallet,
-            "nft_hold": nft_hold,
-            "token_hold": token_hold,
+            "wallet": self.address,
+            "nft_hold": nft_hold_count,
+            "token_hold": round(float(native_balance)),
             "check": check_status
         }
