@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .Apedro_verify import PedroLogin
 from .Apedro_talent_submission import discord_bot
 from .Apedro_talent_confirmed import TalentDataReaders
+from .Apedro_talent_retrieve import TalentDatabase
 from .Apedro_burned import PedroTokenBurnNotifier
 
 from .injective_wallet_info import InjectiveWalletInfo
@@ -100,7 +101,31 @@ async def token_burn_notification(request):
         return json_response({'error': 'Internal server error'}, status=500)
 
 
-
+def retrieve(request, address):
+    """
+    Retrieve talent information by wallet address
+    
+    Args:
+        request: Django request object
+        address (str): Wallet address from URL parameter
+        
+    Returns:
+        JsonResponse: JSON response containing:
+                      - info: "yes" if found, "no" if not
+                      - talent data if found
+                      - error message if not found
+    """
+    try:
+        db = TalentDatabase()
+        
+        result = db.get_talent_by_wallet(address)
+        
+        return JsonResponse(result)
+        
+    except Exception as e:
+        return JsonResponse({
+            "info": "no",
+        }, status=500)
 
 
 
