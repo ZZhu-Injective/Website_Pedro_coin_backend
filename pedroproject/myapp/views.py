@@ -8,7 +8,7 @@ from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 
 from .Apedro_verify import PedroLogin
-from .Apedro_talent_submission import discord_bot
+from .Apedro_talent_submission_update import talent_hub_bot
 from .Apedro_talent_confirmed import TalentDataReaders
 from .Apedro_talent_retrieve import TalentDatabase
 from .Apedro_burned import PedroTokenBurnNotifier
@@ -42,12 +42,21 @@ async def verify(request, address):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
-def start_bot_in_thread():
-    discord_bot.start()
+def start_bot():
+    """Start the Discord bot in its own event loop"""
+    def run_bot():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        talent_hub_bot.loop = loop
+        loop.run_until_complete(talent_hub_bot.start())
 
-if not hasattr(discord_bot, 'bot_thread'):
-    discord_bot.bot_thread = threading.Thread(target=start_bot_in_thread, daemon=True)
-    discord_bot.bot_thread.start()
+    if not hasattr(start_bot, 'bot_started'):
+        bot_thread = threading.Thread(target=run_bot, daemon=True)
+        bot_thread.start()
+        start_bot.bot_started = True
+        logger.info("Discord bot started successfully")
+
+start_bot()
 
 @csrf_exempt
 async def talent_submit(request, address):
@@ -59,8 +68,8 @@ async def talent_submit(request, address):
         
         try:
             future = asyncio.run_coroutine_threadsafe(
-                discord_bot.post_submission(data),
-                discord_bot.loop
+                talent_hub_bot.post_submission(data),
+                talent_hub_bot.loop
             )
             message = future.result(timeout=10)
             
@@ -100,21 +109,7 @@ async def token_burn_notification(request):
         logger.error(f"Burn notification error: {str(e)}", exc_info=True)
         return json_response({'error': 'Internal server error'}, status=500)
 
-
 def retrieve(request, address):
-    """
-    Retrieve talent information by wallet address
-    
-    Args:
-        request: Django request object
-        address (str): Wallet address from URL parameter
-        
-    Returns:
-        JsonResponse: JSON response containing:
-                      - info: "yes" if found, "no" if not
-                      - talent data if found
-                      - error message if not found
-    """
     try:
         db = TalentDatabase()
         
@@ -126,14 +121,59 @@ def retrieve(request, address):
         return JsonResponse({
             "info": "no",
         }, status=500)
+    
+@csrf_exempt
+async def talent_update(request, address):
+    if request.method not in ['POST', 'PUT']:
+        return JsonResponse(
+            {'error': 'Only POST or PUT methods are allowed'}, 
+            status=405
+        )
 
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        
+        if data.get('walletAddress') != address:
+            return JsonResponse(
+                {'error': 'Wallet address does not match URL'}, 
+                status=400
+            )
 
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                talent_hub_bot.post_update_request(data['walletAddress'], data),
+                talent_hub_bot.loop
+            )
+            message = future.result(timeout=2)
 
+            return JsonResponse({
+                'success': True,
+                'message_id': str(message.id),
+                'message': 'Update request submitted successfully'
+            })
+        except asyncio.TimeoutError:
+            return JsonResponse(
+                {'error': 'Request timed out'}, 
+                status=504
+            )
+        except Exception as e:
+            logger.error(f"Error posting update: {str(e)}", exc_info=True)
+            return JsonResponse(
+                {'error': 'Failed to process update'}, 
+                status=500
+            )
 
-
-
-
-
+    except json.JSONDecodeError:
+        return JsonResponse(
+            {'error': 'Invalid JSON data'}, 
+            status=400
+        )
+    except Exception as e:
+        logger.error(f"Error processing talent update: {str(e)}", exc_info=True)
+        return JsonResponse(
+            {'error': 'Internal server error'}, 
+            status=500
+        )
 
 
 
