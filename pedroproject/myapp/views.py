@@ -12,6 +12,7 @@ from .Apedro_talent_submission_update import talent_hub_bot
 from .Apedro_talent_confirmed import TalentDataReaders
 from .Apedro_talent_retrieve import TalentDatabase
 from .Apedro_burned import PedroTokenBurnNotifier
+from .Apedro_show_token import ShowToken
 
 from .injective_wallet_info import InjectiveWalletInfo
 from .injective_token_info import InjectiveTokenInfo
@@ -174,6 +175,22 @@ async def talent_update(request, address):
             {'error': 'Internal server error'}, 
             status=500
         )
+
+async def token_balances(request, address):
+    try:
+        token_checker = ShowToken(address)
+        
+        try:
+            result = await token_checker.fetch_balances_with_metadata()
+            return json_response(result)
+        finally:
+            await token_checker.close()
+            
+    except Exception as e:
+        logger.error(f"Error fetching token balances: {str(e)}", exc_info=True)
+        return json_response({'error': str(e)}, status=500)
+    
+
 
 
 

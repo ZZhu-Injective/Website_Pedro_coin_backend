@@ -14,7 +14,6 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['api.pedroinjraccoon.online', 'website-pedro-coin-4-c5aj.vercel.app', 'localhost', '127.0.0.1', '128.199.46.5']
 
-# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -107,4 +106,5 @@ CORS_ALLOWED_ORIGINS = [
     "https://pedroinjraccoon.online",
     "https://art.pedroinjraccoon.online",
     "https://job.pedroinjraccoon.online",
+    "https://burn.pedroinjraccoon.online",
 ]

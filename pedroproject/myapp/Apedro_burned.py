@@ -21,9 +21,9 @@ class PedroTokenBurnNotifier:
         self.client = AsyncClient(self.network)
         self.discord_webhook_url = os.getenv(
             "DISCORD_WEBHOOK_URL", 
-            "https://discord.com/api/webhooks/1377592830167482379/6gJQG-6_nNm32t6ReKUTErnIOG5hCi6qSBRMCabb6tGM41_JuaigGYY4zIXsNFUiCcML"
+            "https://discord.com/api/webhooks/1386986928095760394/Kr_mBcJvWe9zQ3UIalHCmNi5L9yk2FLL-saM33H9BgmXQVdCx5yzWqWoB2K6c3SQXffR"
         )
-        self.role_id = "1340790768360755281"
+        self.role_id = "1362554186574594248"
         self.explorer_base_url = "https://explorer.injective.network/transaction"
 
     def _format_amount(self, amount: str) -> str:
@@ -151,3 +151,4 @@ class PedroTokenBurnNotifier:
             error_msg = f"Unexpected error: {str(e)}"
             logger.error(error_msg, exc_info=True)
             return error_msg
+        

@@ -624,7 +624,7 @@ class TalentHubBot:
         """Start the Discord bot"""
         async def runner():
             try:
-                await self.bot.start()
+                await self.bot.start("")
             except Exception as e:
                 print(f"❌ Bot error: {e}")
                 await self.bot.close()
