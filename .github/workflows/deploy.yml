@@ -1,0 +1,53 @@
+name: Deploy with .env Sync
+
+on:
+  push:
+    branches: [ main ] 
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate .env
+        run: |
+          cat << EOF > .env
+          # Database
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          
+          # Django
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          DEBUG=False
+          
+          # Discord Bot
+          DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
+          
+          # Add other secrets...
+          EOF
+        shell: bash
+
+      - name: Secure Copy .env to Server
+        uses: appleboy/scp-action@v0.1.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: ".env"
+          target: "/home/your_user/project_dir/.env"  
+          rm: true 
+
+      - name: Lock down .env permissions
+        run: |
+          ssh -i ${{ secrets.SSH_PRIVATE_KEY }} \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "chmod 600 /home/your_user/project_dir/.env"
+
+      - name: Restart Application
+        run: |
+          ssh -i ${{ secrets.SSH_PRIVATE_KEY }} \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "sudo systemctl restart gunicorn"
+
+      - name: Remove local .env
+        run: rm -f .env
