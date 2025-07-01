@@ -13,18 +13,11 @@ jobs:
       - name: Generate .env
         run: |
           cat << EOF > .env
-          # Database
-          DATABASE_URL=${{ secrets.DATABASE_URL }}
-          
-          # Django
-          SECRET_KEY=${{ secrets.SECRET_KEY }}
-          DEBUG=False
           
           # Discord Bot
           DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
           
-          # Add other secrets...
-          EOF
+          DISCORD_BURN_WEBHOOK=${{secrets.DISCORD_BURN_WEBHOOK}}
         shell: bash
 
       - name: Secure Copy .env to Server
