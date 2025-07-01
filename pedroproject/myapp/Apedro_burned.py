@@ -1,4 +1,3 @@
-import asyncio
 import os
 import base64
 import discord
@@ -8,6 +7,9 @@ from decimal import Decimal, InvalidOperation
 from pyinjective.client.model.pagination import PaginationOption
 from pyinjective.async_client import AsyncClient
 from pyinjective.core.network import Network
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,

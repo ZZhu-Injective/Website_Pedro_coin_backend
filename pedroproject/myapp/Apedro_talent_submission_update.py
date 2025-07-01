@@ -6,7 +6,9 @@ from discord.ui import Button, View, Modal, TextInput
 from openpyxl import Workbook, load_workbook
 from datetime import datetime
 from typing import Dict, Optional, List
+from dotenv import load_dotenv
 
+load_dotenv()
 
 class TalentHubBot:
     _instance = None
@@ -28,6 +30,8 @@ class TalentHubBot:
         self.pending_updates: Dict[str, dict] = {}
         self.loop = asyncio.new_event_loop()
         self.excel_file = "1.Atalent_submissions.xlsx"
+        self.bot_code = os.getenv("DISCORD_BOT")
+
         
         self._ensure_excel_file()
         
@@ -624,7 +628,7 @@ class TalentHubBot:
         """Start the Discord bot"""
         async def runner():
             try:
-                await self.bot.start("")
+                await self.bot.start(self.bot_code)
             except Exception as e:
                 print(f"❌ Bot error: {e}")
                 await self.bot.close()
