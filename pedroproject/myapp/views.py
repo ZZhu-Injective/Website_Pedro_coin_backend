@@ -3,6 +3,8 @@ from asyncio.log import logger
 import json
 import threading
 
+from dotenv import load_dotenv
+
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
@@ -46,6 +48,7 @@ async def verify(request, address):
 def start_bot():
     """Start the Discord bot in its own event loop"""
     def run_bot():
+        load_dotenv() 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         talent_hub_bot.loop = loop

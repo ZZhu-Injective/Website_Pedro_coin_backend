@@ -1,8 +1,8 @@
+import asyncio
 import os
 import base64
 import discord
 import logging
-from datetime import datetime
 from typing import Dict, Any
 from decimal import Decimal, InvalidOperation
 from pyinjective.client.model.pagination import PaginationOption
@@ -19,10 +19,7 @@ class PedroTokenBurnNotifier:
     def __init__(self):
         self.network = Network.mainnet()
         self.client = AsyncClient(self.network)
-        self.discord_webhook_url = os.getenv(
-            "DISCORD_WEBHOOK_URL", 
-            "https://discord.com/api/webhooks/1386986928095760394/Kr_mBcJvWe9zQ3UIalHCmNi5L9yk2FLL-saM33H9BgmXQVdCx5yzWqWoB2K6c3SQXffR"
-        )
+        self.discord_webhook_url = os.getenv("DISCORD_BURN_WEBHOOK")
         self.role_id = "1362554186574594248"
         self.explorer_base_url = "https://explorer.injective.network/transaction"
 
@@ -151,4 +148,3 @@ class PedroTokenBurnNotifier:
             error_msg = f"Unexpected error: {str(e)}"
             logger.error(error_msg, exc_info=True)
             return error_msg
-        
