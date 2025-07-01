@@ -1,24 +1,28 @@
-name: Deploy with .env Sync
+name: Deploy Pedro Coin Backend
 
 on:
   push:
-    branches: [ main ] 
+    branches: [ main ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Generate .env
+      - name: Generate .env file
         run: |
-          cat << EOF > .env
-          
-          # Discord Bot
-          DISCORD_BOT=${{ secrets.DISCORD_BOT_TOKEN }}
-          
-          DISCORD_BURN_WEBHOOK=${{secrets.DISCORD_BURN_WEBHOOK}}
-        shell: bash
+          cat << EOF > pedroproject/.env
+          # Discord Bot Configuration
+          DISCORD_BOT=${{ secrets.DISCORD_BOT}}
+          DISCORD_BURN_WEBHOOK=${{ secrets.DISCORD_BURN_WEBHOOK }}
+          EOF
+
+      - name: Install SSH Key
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Secure Copy .env to Server
         uses: appleboy/scp-action@v0.1.0
@@ -26,21 +30,30 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: ".env"
-          target: "/home/your_user/project_dir/.env"  
-          rm: true 
+          source: "pedroproject/.env"
+          target: "/home/${{ secrets.SSH_USER }}/pedroproject/.env"
+          rm: true
 
-      - name: Lock down .env permissions
+      - name: Set secure permissions
         run: |
-          ssh -i ${{ secrets.SSH_PRIVATE_KEY }} \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "chmod 600 /home/your_user/project_dir/.env"
+          ssh -o StrictHostKeyChecking=no \
+              -i ${{ secrets.SSH_PRIVATE_KEY }} \
+              ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+              "chmod 600 /home/${{ secrets.SSH_USER }}/pedroproject/.env"
 
-      - name: Restart Application
+      - name: Restart Application Service
         run: |
-          ssh -i ${{ secrets.SSH_PRIVATE_KEY }} \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "sudo systemctl restart gunicorn"
+          ssh -o StrictHostKeyChecking=no \
+              -i ${{ secrets.SSH_PRIVATE_KEY }} \
+              ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+              "cd /home/${{ secrets.SSH_USER }}/pedroproject && \
+               sudo systemctl restart gunicorn && \
+               sudo systemctl status gunicorn"
 
-      - name: Remove local .env
-        run: rm -f .env
+      - name: Clean up local .env
+        run: rm -f pedroproject/.env
+
+      - name: Verify deployment
+        run: |
+          echo "Deployment to ${{ secrets.SSH_HOST }} completed successfully"
+          echo "Service restarted: gunicorn"
