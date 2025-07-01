@@ -141,7 +141,8 @@ class PedroTokenBurnNotifier:
             
             logger.info(f"Successfully notified about burn transaction: {burn_data.get('txHash')}")
             return "OK"
-            
+        
+        #print
         except discord.DiscordException as e:
             error_msg = f"Discord API error: {str(e)}"
             logger.error(error_msg)
