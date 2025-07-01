@@ -15,7 +15,7 @@ jobs:
           cat << EOF > .env
           
           # Discord Bot
-          DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_BOT=${{ secrets.DISCORD_BOT_TOKEN }}
           
           DISCORD_BURN_WEBHOOK=${{secrets.DISCORD_BURN_WEBHOOK}}
         shell: bash
