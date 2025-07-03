@@ -17,7 +17,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-#interesting
 class PedroTokenBurnNotifier:
     def __init__(self):
         self.network = Network.mainnet()
