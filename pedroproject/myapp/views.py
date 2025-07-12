@@ -14,7 +14,7 @@ from .ABpedro_talent_submission_update import talent_hub_bot
 from .ABpedro_talent_web_confirmed import TalentDataReaders
 from .ABpedro_talent_web_retrieve import TalentDatabase
 from .AApedro_burned_notif_discord import PedroTokenBurnNotifier
-from .ACpedro_show_token_burn_web import ShowToken
+from .ACpedro_show_token_burn_web import TokenVerifier
 
 from .injective_wallet_info import InjectiveWalletInfo
 from .injective_token_info import InjectiveTokenInfo
@@ -181,10 +181,10 @@ async def talent_update(request, address):
 
 async def token_balances(request, address):
     try:
-        token_checker = ShowToken(address)
+        token_checker = TokenVerifier(address)
         
         try:
-            result = await token_checker.fetch_balances_with_metadata()
+            result = await token_checker.get_balances()
             return json_response(result)
         finally:
             await token_checker.close()
