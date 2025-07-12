@@ -9,12 +9,12 @@ from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 
-from .Apedro_verify import PedroLogin
-from .Apedro_talent_submission_update import talent_hub_bot
-from .Apedro_talent_confirmed import TalentDataReaders
-from .Apedro_talent_retrieve import TalentDatabase
-from .Apedro_burned import PedroTokenBurnNotifier
-from .Apedro_show_token import ShowToken
+from .AApedro_verify_all_webpage import PedroLogin
+from .ABpedro_talent_submission_update import talent_hub_bot
+from .ABpedro_talent_web_confirmed import TalentDataReaders
+from .ABpedro_talent_web_retrieve import TalentDatabase
+from .AApedro_burned_notif_discord import PedroTokenBurnNotifier
+from .ACpedro_show_token_burn_web import ShowToken
 
 from .injective_wallet_info import InjectiveWalletInfo
 from .injective_token_info import InjectiveTokenInfo

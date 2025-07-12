@@ -7,7 +7,12 @@ from pyinjective.async_client import AsyncClient
 from pyinjective.client.model.pagination import PaginationOption
 
 """
-Check if you hold our token (100.000) or NFTs (1)!
+Before diving into the dapps, make sure youre eligible to use them. Here's what you need:
+
+- Hold at least 100,000 $PEDRO tokens
+- Own 1 $PEDRO NFTs
+
+These assets unlock features across our ecosystem and give you full access to participating dapps.
 """
 
 class PedroLogin:

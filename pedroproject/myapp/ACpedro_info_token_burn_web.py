@@ -1,12 +1,11 @@
 import base64
-import aiohttp
 from datetime import datetime
 from pyinjective.client.model.pagination import PaginationOption
 from pyinjective.async_client import AsyncClient
 from pyinjective.core.network import Network
 
+#This info is very important in the $PEDRO website for burn page.
 class PedroTokenInfo:
-
     memecoin = [
         {
             "name": "Pedro",
@@ -76,23 +75,29 @@ class PedroTokenInfo:
         await self.burn_supply_native()
         await self.total_and_burn_supply_cw20()
 
+        result = []
         for token in self.memecoin:
             total_burn_native = float(token.get('total_burn_native', 0))
             total_burn_cw20 = float(token.get('total_burn_cw20', 0))
             total_supply_cw20 = float(token.get('total_supply_cw20', 0))
 
-            token['total_burn'] = total_burn_native + total_burn_cw20
-            token['total_supply'] = total_supply_cw20
-            token['circulation_supply'] = token['total_supply'] - token['total_burn']
-            token['time'] = datetime.now().strftime('%d-%m-%Y %H:%M')
+            result.append({
+                'total_burn_native': total_burn_native,
+                'total_supply_cw20': total_supply_cw20,
+                'total_burn_cw20': total_burn_cw20,
+                'total_burn': total_burn_native + total_burn_cw20,
+                'total_supply': total_supply_cw20,
+                'circulation_supply': total_supply_cw20 - (total_burn_native + total_burn_cw20),
+                'time': datetime.now().strftime('%d-%m-%Y %H:%M')
+            })
         
-        return self.memecoin
+        return result
     
-async def main():
-    pedro_token = PedroTokenInfo()
-    result = await pedro_token.circulation_supply()
-    print(result)
+#async def main():
+#    pedro_token = PedroTokenInfo()
+#    result = await pedro_token.circulation_supply()
+#    print(result)
 
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+#if __name__ == "__main__":
+#    import asyncio
+#    asyncio.run(main())

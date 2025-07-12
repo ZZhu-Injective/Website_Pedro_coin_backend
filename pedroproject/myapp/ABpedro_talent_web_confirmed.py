@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from datetime import datetime
 
+#Get info from database about the talented people.
 class TalentDataReaders:
     def __init__(self, file_path=None):
         if file_path is None:

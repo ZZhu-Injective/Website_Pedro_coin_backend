@@ -2,17 +2,12 @@ import os
 import pandas as pd
 from openpyxl import load_workbook
 
+#Checking Talent to retrieve it based on the walletaddress.
 class TalentDatabase:
     def __init__(self, excel_file='1.Atalent_submissions.xlsx'):
         self.file_path = os.path.join(excel_file)
     
     def load_data(self) -> pd.DataFrame:
-        """
-        Load all talent submission data from Excel into a pandas DataFrame.
-        
-        Returns:
-            pd.DataFrame: DataFrame containing all submission data
-        """
         try:
             if not os.path.exists(self.file_path):
                 raise FileNotFoundError(f"Database file not found at {self.file_path}")
@@ -49,33 +44,12 @@ class TalentDatabase:
             return pd.DataFrame()
     
     def get_by_wallet(self, wallet_address: str) -> pd.DataFrame:
-        """
-        Get submissions by wallet address.
-        
-        Args:
-            wallet_address (str): Wallet address to search for
-            
-        Returns:
-            pd.DataFrame: DataFrame containing matching submissions
-        """
         df = self.load_data()
         if not df.empty and 'Wallet Address' in df.columns:
             return df[df['Wallet Address'].str.lower() == wallet_address.lower()].copy()
         return pd.DataFrame()
     
     def get_talent_by_wallet(self, wallet_address: str) -> dict:
-        """
-        Retrieve talent submission information by wallet address.
-        
-        Args:
-            wallet_address (str): The wallet address to search for
-            
-        Returns:
-            dict: A dictionary containing:
-                - "info": "yes" if found, "no" if not found
-                - The talent submission data if found
-                - Error message if not found
-        """
         try:
             wallet_data = self.get_by_wallet(wallet_address)
             

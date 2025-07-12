@@ -10,6 +10,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+"""
+Talent pool where u submit it. The bot will send information to our discord and we can approve it or reject it!
+"""
+
 class TalentHubBot:
     _instance = None
     
@@ -39,7 +43,6 @@ class TalentHubBot:
         self.bot.event(self.on_interaction)
     
     def _ensure_excel_file(self):
-        """Ensure the Excel file exists with correct structure"""
         if not os.path.exists(self.excel_file):
             self._init_excel_file()
         else:
@@ -60,7 +63,6 @@ class TalentHubBot:
                 self._backup_and_recreate_excel()
     
     def _init_excel_file(self):
-        """Initialize a new Excel file with headers"""
         wb = Workbook()
         ws = wb.active
         ws.title = "Submissions"
@@ -77,13 +79,11 @@ class TalentHubBot:
         wb.save(self.excel_file)
     
     def _backup_and_recreate_excel(self):
-        """Backup corrupt Excel file and create a new one"""
         backup_name = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         os.rename(self.excel_file, backup_name)
         self._init_excel_file()
     
     async def _find_submission_row(self, wallet_address: str) -> Optional[int]:
-        """Find the row number for a given wallet address"""
         try:
             wb = load_workbook(self.excel_file)
             ws = wb.active
@@ -99,7 +99,6 @@ class TalentHubBot:
             return None
     
     async def _update_excel_status(self, wallet_address: str, new_status: str) -> bool:
-        """Update status in Excel for a specific wallet address"""
         try:
             wb = load_workbook(self.excel_file)
             ws = wb.active
@@ -117,7 +116,6 @@ class TalentHubBot:
             return False
     
     async def _update_excel_record(self, wallet_address: str, updates: dict, status: str) -> bool:
-        """Update multiple fields in Excel for a specific wallet address"""
         try:
             wb = load_workbook(self.excel_file)
             ws = wb.active
@@ -173,7 +171,6 @@ class TalentHubBot:
             return False
     
     async def _get_existing_record(self, wallet_address: str) -> Optional[dict]:
-        """Get the existing record for a wallet address"""
         try:
             wb = load_workbook(self.excel_file)
             ws = wb.active
@@ -217,7 +214,6 @@ class TalentHubBot:
             return None
     
     async def _save_new_submission(self, data: dict) -> bool:
-        """Save a new submission to Excel"""
         try:
             wallet = data.get('walletAddress', '')
             
@@ -293,7 +289,6 @@ class TalentHubBot:
             )
     
     async def _handle_submission_interaction(self, interaction: discord.Interaction, action: str, wallet: str):
-        """Handle interactions for new submissions"""
         submission = self.pending_submissions.get(wallet)
         
         if not submission:
@@ -340,7 +335,6 @@ class TalentHubBot:
                 SubmissionChangesModal(submission))
     
     async def _handle_update_interaction(self, interaction: discord.Interaction, action: str, wallet: str):
-        """Handle interactions for update requests"""
         update_data = self.pending_updates.get(wallet)
         
         if not update_data:
@@ -378,7 +372,6 @@ class TalentHubBot:
                 UpdateChangesModal(update_data))
     
     async def _update_submission_message(self, interaction: discord.Interaction, submission: dict):
-        """Update the Discord message for a submission"""
         try:
             embed = self._create_submission_embed(submission)
             message = await interaction.channel.fetch_message(submission['message_id'])
@@ -396,7 +389,6 @@ class TalentHubBot:
             print(f"Error updating update message: {e}")
     
     def _create_submission_embed(self, data: dict) -> discord.Embed:
-        """Create a Discord embed for a talent submission"""
         submission_data = data.get('data', {})
         status = data.get('status', 'Pending')
         
@@ -470,7 +462,6 @@ class TalentHubBot:
         return embed
     
     def _create_update_embed(self, update_data: dict, status: str) -> discord.Embed:
-        """Create a Discord embed for a talent update"""
         existing_data = update_data.get('existing_data', {})
         updates = update_data.get('updates', {})
         wallet = update_data.get('wallet', '')
@@ -529,7 +520,6 @@ class TalentHubBot:
         return embed
     
     def _create_submission_review_buttons(self, wallet: str) -> View:
-        """Create the action buttons for submission review"""
         view = View(timeout=None)  
         
         buttons = [
@@ -544,7 +534,6 @@ class TalentHubBot:
         return view
     
     def _create_update_review_buttons(self, wallet: str) -> View:
-        """Create the action buttons for update review"""
         view = View(timeout=None)  
         
         buttons = [
@@ -558,7 +547,6 @@ class TalentHubBot:
         return view
     
     async def post_submission(self, data: dict) -> Optional[discord.Message]:
-        """Post a new talent submission to Discord"""
         try:
             channel = self.bot.get_channel(self.submission_channel_id)
             if not channel:
@@ -591,7 +579,6 @@ class TalentHubBot:
             return None
     
     async def post_update_request(self, wallet_address: str, updates: dict) -> Optional[discord.Message]:
-        """Post a talent profile update request to Discord"""
         try:
             channel = self.bot.get_channel(self.submission_channel_id)
             if not channel:
@@ -625,7 +612,6 @@ class TalentHubBot:
             return None
     
     def start(self):
-        """Start the Discord bot"""
         async def runner():
             try:
                 await self.bot.start(self.bot_code)
@@ -636,7 +622,6 @@ class TalentHubBot:
         self.loop.run_until_complete(runner())
     
     def stop(self):
-        """Stop the Discord bot gracefully"""
         async def shutdown():
             await self.bot.close()
         

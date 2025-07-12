@@ -9,6 +9,17 @@ from pyinjective.async_client import AsyncClient
 from pyinjective.core.network import Network
 from dotenv import load_dotenv
 
+"""
+The $PEDRO dapps are actively being used to monitor token burns. Its a great indicator of engagement and transparency across the ecosystem.
+
+These webhook display:
+- Burned Amount of $PEDRO tokens
+- Remaining Supply in circulation
+- Reason for Burn and detailed Burner Information
+
+All this data is streamed live through a Discord webhook, giving real-time insights into dapp activity and burn events.
+"""
+
 load_dotenv()
 
 logging.basicConfig(
@@ -26,7 +37,6 @@ class PedroTokenBurnNotifier:
         self.explorer_base_url = "https://explorer.injective.network/transaction"
 
     def _format_amount(self, amount: str) -> str:
-        """Format numeric amounts with proper thousands separators."""
         try:
             amount_decimal = Decimal(amount)
             return "{:,.2f}".format(amount_decimal)
@@ -76,7 +86,6 @@ class PedroTokenBurnNotifier:
         return burn_coin
 
     async def _create_embed(self, burn_data: Dict[str, Any]) -> discord.Embed:
-        """Create a Discord embed with burn transaction details."""
         burned_amount = burn_data.get('baseAmount', '0')
         burner_address = burn_data.get('srcInjectiveAddress', 'Unknown')
         burn_reason = burn_data.get('reason', 'Not specified')
@@ -142,7 +151,6 @@ class PedroTokenBurnNotifier:
             logger.info(f"Successfully notified about burn transaction: {burn_data.get('txHash')}")
             return "OK"
         
-        #print
         except discord.DiscordException as e:
             error_msg = f"Discord API error: {str(e)}"
             logger.error(error_msg)
@@ -151,3 +159,19 @@ class PedroTokenBurnNotifier:
             error_msg = f"Unexpected error: {str(e)}"
             logger.error(error_msg, exc_info=True)
             return error_msg
+
+#async def test_burn_notification():
+#    notifier = PedroTokenBurnNotifier()
+#    
+#    example_burn_data = {
+#        'baseAmount': '500000',
+#        'srcInjectiveAddress': 'inj1exampleaddress1234567890',
+#        'txHash': 'A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0',
+#        'reason': 'Monthly token burn as per project tokenomics'
+#    }
+#    
+#    result = await notifier.process_burn_transaction(example_burn_data)
+#    print(f"Notification result: {result}")
+#
+#import asyncio
+#asyncio.run(test_burn_notification())
