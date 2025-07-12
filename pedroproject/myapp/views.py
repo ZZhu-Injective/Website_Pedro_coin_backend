@@ -102,7 +102,6 @@ async def token_burn_notification(request):
 
     try:
         data = json.loads(request.body.decode('utf-8'))
-        print(data)
         notifier = PedroTokenBurnNotifier()
         result = await notifier.process_burn_transaction(
             burn_data=data.get('burn_data', {}),
@@ -185,6 +184,7 @@ async def token_balances(request, address):
         
         try:
             result = await token_checker.get_balances()
+            print(result)
             return json_response(result)
         finally:
             await token_checker.close()

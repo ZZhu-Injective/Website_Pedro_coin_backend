@@ -22,15 +22,22 @@ class TokenVerifier:
         possible_filenames = [
             'ACpedro_verified_token.json',
             'ACpedro_verifeid_token.json',
-            os.path.join('pedroproject', 'myapp', 'ACpedro_verified_token.json')
+            os.path.join('pedroproject', 'myapp', 'ACpedro_verified_token.json'),
+            os.path.join(os.path.dirname(__file__), 'ACpedro_verified_token.json')
         ]
         
         for filename in possible_filenames:
             try:
                 if os.path.exists(filename):
+                    print(f"Loading verified tokens from: {filename}")
                     with open(filename, 'r', encoding='utf-8') as f:
-                        return json.load(f)
-            except Exception:
+                        tokens = json.load(f)
+                        if not isinstance(tokens, list):
+                            print(f"Warning: Expected list in {filename}, got {type(tokens)}")
+                            continue
+                        return tokens
+            except Exception as e:
+                print(f"Error loading {filename}: {str(e)}")
                 continue
         
         print("Warning: Could not load verified tokens file")
@@ -38,20 +45,31 @@ class TokenVerifier:
 
     @backoff.on_exception(backoff.expo, Exception, max_tries=5)
     async def _fetch_balances(self) -> Dict:
+        """Fetch balances from the blockchain"""
         return await self.client.fetch_bank_balances(address=self.address)
 
-    def _find_verified_token(self, denom: str, symbol: str) -> Optional[Dict]:
+    def _find_verified_token(self, denom: str, symbol: str) -> Optional[Dict]:        
         for token in self.verified_tokens:
             if token.get('denom') == denom:
                 return token
         
         clean_symbol = symbol.lower().strip()
         for token in self.verified_tokens:
-            if token.get('symbol', '').lower().strip() == clean_symbol:
-                return token
-            if token.get('overrideSymbol', '').lower().strip() == clean_symbol:
+            token_symbol = token.get('symbol', '').lower().strip()
+            override_symbol = token.get('overrideSymbol', '').lower().strip()
+            
+            if token_symbol == clean_symbol or override_symbol == clean_symbol:
+                print(f"Symbol match found: {token.get('symbol')} (input: {symbol})")
                 return token
         
+        if 'factory/' in denom:
+            last_part = denom.split('/')[-1]
+            for token in self.verified_tokens:
+                if token.get('denom', '').endswith(last_part):
+                    print(f"Partial denom match found: {token.get('symbol')}")
+                    return token
+        
+        print("No matching verified token found")
         return None
 
     async def _process_token(self, balance: Dict) -> Dict:
@@ -60,16 +78,19 @@ class TokenVerifier:
             amount = balance['amount']
             base_symbol = denom.split('/')[-1] if '/' in denom else denom
             
-            if verified := self._find_verified_token(denom, base_symbol):
+            verified_token = self._find_verified_token(denom, base_symbol)
+            
+            if verified_token:
                 return {
-                    'symbol': verified.get('overrideSymbol', verified.get('symbol', base_symbol)),
-                    'decimals': verified.get('decimals', 18),
+                    'symbol': verified_token.get('overrideSymbol', verified_token.get('symbol', base_symbol)),
+                    'decimals': verified_token.get('decimals', 18),
                     'denom': denom,
                     'amount': amount,
-                    'human_readable_amount': self._format_amount(amount, verified.get('decimals', 18)),
-                    'name': verified.get('name', 'Unknown'),
-                    'logo': verified.get('logo'),
-                    'is_verified': True
+                    'human_readable_amount': self._format_amount(amount, verified_token.get('decimals', 18)),
+                    'name': verified_token.get('name', 'Unknown'),
+                    'logo': verified_token.get('logo'),
+                    'is_verified': True,
+                    'source': 'verified_list'
                 }
             
             try:
@@ -84,10 +105,11 @@ class TokenVerifier:
                         'amount': amount,
                         'human_readable_amount': self._format_amount(amount, decimals),
                         'name': metadata.get('name', 'Unknown'),
-                        'is_verified': False
+                        'is_verified': False,
+                        'source': 'chain_metadata'
                     }
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Error fetching metadata for {denom}: {str(e)}")
             
             return {
                 'symbol': base_symbol,
@@ -96,14 +118,16 @@ class TokenVerifier:
                 'amount': amount,
                 'human_readable_amount': self._format_amount(amount, 18),
                 'name': 'Unknown',
-                'is_verified': False
+                'is_verified': False,
+                'source': 'default_values'
             }
 
     @backoff.on_exception(backoff.expo, Exception, max_tries=3)
     async def _fetch_token_metadata(self, denom: str) -> Optional[Dict]:
         try:
             return await self.client.fetch_denom_metadata(denom=denom)
-        except Exception:
+        except Exception as e:
+            print(f"Metadata fetch failed for {denom}: {str(e)}")
             return None
 
     def _extract_decimals(self, metadata: Dict) -> int:
@@ -116,29 +140,39 @@ class TokenVerifier:
                 if exponent := unit.get('exponent'):
                     return exponent
         
-        return max((u.get('exponent', 0) for u in metadata['denomUnits']))
+        return max((u.get('exponent', 0) for u in metadata['denomUnits']), default=18)
 
     def _format_amount(self, amount: str, decimals: int) -> str:
         try:
             amount_int = int(amount)
+            if amount_int == 0:
+                return "0"
+            
             divisor = 10 ** decimals
             formatted = f"{amount_int / divisor:,.{max(2, decimals)}f}"
-            return formatted.rstrip('0').rstrip('.') if '.' in formatted else formatted
+            
+            if '.' in formatted:
+                formatted = formatted.rstrip('0').rstrip('.')
+            
+            return formatted
         except (ValueError, TypeError):
             return amount
 
     async def get_balances(self) -> Dict:
+        print("\nFetching balances...")
         balances_data = await self._fetch_balances()
         balances = balances_data.get('balances', [])
         
+        print(f"Found {len(balances)} token balances to process")
         tasks = [self._process_token(balance) for balance in balances]
+        results = await asyncio.gather(*tasks)
+        
         return {
             "address": self.address,
-            "token_info": await asyncio.gather(*tasks)
+            "token_info": results
         }
 
     async def close(self):
-        """Cleanup resources"""
         await self.session.close()
 
 #async def main():
@@ -146,16 +180,15 @@ class TokenVerifier:
 #    verifier = TokenVerifier(address)
 #    
 #    try:
+#        print("Starting token verification...")
 #        result = await verifier.get_balances()
-#        for token in result['token_info']:
-#            print(f"\nToken: {token['symbol']}")
-#            print(f"Name: {token['name']}")
-#            print(f"Amount: {token['human_readable_amount']}")
-#            print(f"Denom: {token['denom']}")
-#            if token.get('logo'):
-#                print(f"Logo: {token['logo']}")
-#            print(f"Verified: {'Yes' if token['is_verified'] else 'No'}")
-#            print("-" * 30)
+#        
+#        # Pretty print the result
+#        print("\nFinal Result:")
+#        print(json.dumps(result, indent=2))
+#        
+#    except Exception as e:
+#        print(f"Error: {str(e)}")
 #    finally:
 #        await verifier.close()
 #
