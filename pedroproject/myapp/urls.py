@@ -6,6 +6,7 @@ urlpatterns = [
 
     path('talent/', views.talent, name='talent'),
     path('burn/', views.token_burn_notification, name='burn'),
+    path('pedro_burn/', views.pedro_burn_info, name='pedro_burn'),
     path('check_pedro/<str:address>/', views.verify, name='verify'),
     path('talent_retrieve/<str:address>/', views.retrieve, name='retrieve'),
     path('talent_submit/<str:address>/', views.talent_submit, name='talent_submit'),

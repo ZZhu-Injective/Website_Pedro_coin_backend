@@ -8,7 +8,6 @@ from pyinjective.async_client import AsyncClient
 import backoff
 
 class TokenVerifier:
-    """Token verification system with logo support"""
     
     def __init__(self, address: str):
         self.address = address

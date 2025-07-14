@@ -93,11 +93,11 @@ class PedroTokenInfo:
         
         return result
     
-#async def main():
-#    pedro_token = PedroTokenInfo()
-#    result = await pedro_token.circulation_supply()
-#    print(result)
+async def main():
+    pedro_token = PedroTokenInfo()
+    result = await pedro_token.circulation_supply()
+    print(result)
 
-#if __name__ == "__main__":
-#    import asyncio
-#    asyncio.run(main())
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())

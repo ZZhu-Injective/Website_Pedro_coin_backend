@@ -9,13 +9,16 @@ from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 
+# Newest Version of the Backend
 from .AApedro_verify_all_webpage import PedroLogin
 from .ABpedro_talent_submission_update import talent_hub_bot
 from .ABpedro_talent_web_confirmed import TalentDataReaders
 from .ABpedro_talent_web_retrieve import TalentDatabase
 from .AApedro_burned_notif_discord import PedroTokenBurnNotifier
 from .ACpedro_show_token_burn_web import TokenVerifier
+from .ACpedro_info_token_burn_web import PedroTokenInfo
 
+# Oldest Version of the Backend
 from .injective_wallet_info import InjectiveWalletInfo
 from .injective_token_info import InjectiveTokenInfo
 from .injective_meme_holders import InjectiveHolders
@@ -29,7 +32,6 @@ from .injective_talented import TalentDataReader
 from .injective_scam import ScamDataReader
 from .injective_scam_check import ScamChecker
 from .injective_talent_check import TalentNotifier
-
 
 def json_response(data, status=200):
     return JsonResponse(data, safe=False, status=status)
@@ -45,8 +47,11 @@ async def verify(request, address):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
+"""
+Bot for Pedro Discord on Talent/Approval Channel. Where it show the talented to approve or reject.
+"""
+
 def start_bot():
-    """Start the Discord bot in its own event loop"""
     def run_bot():
         load_dotenv() 
         loop = asyncio.new_event_loop()
@@ -61,6 +66,43 @@ def start_bot():
         logger.info("Discord bot started successfully")
 
 start_bot()
+
+"""
+Show Pedro token burn, circulation and supply on the pedro website.
+"""
+
+async def pedro_burn_info(request):
+    try:    
+        pedro_token = PedroTokenInfo()
+        result = await pedro_token.circulation_supply()
+        print(result)
+        return json_response(result)
+            
+    except Exception as e:
+        logger.error(f"Error fetching pedro burn: {str(e)}", exc_info=True)
+        return json_response({'error': str(e)}, status=500)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 @csrf_exempt
 async def talent_submit(request, address):

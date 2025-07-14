@@ -106,4 +106,5 @@ CORS_ALLOWED_ORIGINS = [
     "https://art.pedroinjraccoon.online",
     "https://job.pedroinjraccoon.online",
     "https://burn.pedroinjraccoon.online",
+    "https://pedro-burn.vercel.app",
 ]
