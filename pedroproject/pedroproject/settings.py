@@ -102,9 +102,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://pedroinjraccoon.online",
-    "https://art.pedroinjraccoon.online",
-    "https://job.pedroinjraccoon.online",
-    "https://burn.pedroinjraccoon.online",
-    "https://pedro-burn.vercel.app",
+    "https://injectivepedro.com",
+    "https://art.injectivepedro.com",
+    "https://job.injectivepedro.com",
+    "https://burn.injectivepedro.com",
+    "https://scam.injectivepedro.com",
 ]

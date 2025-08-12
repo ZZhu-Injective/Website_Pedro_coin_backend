@@ -99,13 +99,10 @@ if __name__ == "__main__":
     fetcher = ScamScannerChecker(address)
     df = fetcher.fetch_sequential_ranges()
     
-    # Save the messages column to Excel
     if not df.empty and "messages" in df.columns:
-        # Create a DataFrame with just the messages column
         messages_df = pd.DataFrame(df["messages"])
         messages_df.to_excel("messages.xlsx", index=False)
         print("Saved messages to messages.xlsx")
     
-    # Save the entire DataFrame to Excel
     df.to_excel("all_transactions.xlsx", index=False)
     print("Saved all transactions to all_transactions.xlsx")
