@@ -105,8 +105,8 @@ CORS_ALLOWED_ORIGINS = [
     "localhost",
     "https://www.injectivepedro.com/",
     "https://www.api.injectivepedro.com/",
-    "https://www.art.injectivepedro.com/",
-    "https://www.job.injectivepedro.com/",
-    "https://www.burn.injectivepedro.com/",
-    "https://www.scam.injectivepedro.com/",
+    "https://art.injectivepedro.com/",
+    "https://job.injectivepedro.com/",
+    "https://burn.injectivepedro.com/",
+    "https://scam.injectivepedro.com/",
 ]
