@@ -94,15 +94,15 @@ class ScamScannerChecker:
         """Returns the cleaned DataFrame"""
         return self.df
 
-if __name__ == "__main__":
-    address = "inj14rmguhlul3p30ntsnjph48nd5y2pqx2qwwf4u9"
-    fetcher = ScamScannerChecker(address)
-    df = fetcher.fetch_sequential_ranges()
-    
-    if not df.empty and "messages" in df.columns:
-        messages_df = pd.DataFrame(df["messages"])
-        messages_df.to_excel("messages.xlsx", index=False)
-        print("Saved messages to messages.xlsx")
-    
-    df.to_excel("all_transactions.xlsx", index=False)
-    print("Saved all transactions to all_transactions.xlsx")
+#if __name__ == "__main__":
+#    address = "inj14rmguhlul3p30ntsnjph48nd5y2pqx2qwwf4u9"
+#    fetcher = ScamScannerChecker(address)
+#    df = fetcher.fetch_sequential_ranges()
+#    
+#    if not df.empty and "messages" in df.columns:
+#        messages_df = pd.DataFrame(df["messages"])
+#        messages_df.to_excel("messages.xlsx", index=False)
+#        print("Saved messages to messages.xlsx")
+#    
+#    df.to_excel("all_transactions.xlsx", index=False)
+#    print("Saved all transactions to all_transactions.xlsx")
