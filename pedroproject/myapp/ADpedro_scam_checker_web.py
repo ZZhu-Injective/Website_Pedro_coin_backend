@@ -103,7 +103,7 @@ class ScamScannerChecker:
                 try:
                     batch_df[col] = pd.to_numeric(batch_df[col])
                 except (ValueError, TypeError):
-                    batch_df[col] = batch_df[col]  # Keep original if conversion fails
+                    batch_df[col] = batch_df[col]
         
         return batch_df
     
@@ -134,7 +134,6 @@ class ScamScannerChecker:
         if self.df.empty or "messages" not in self.df.columns:
             return pd.DataFrame()
             
-        # Create a list of all messages with transaction context
         all_messages = []
         for _, tx in self.df.iterrows():
             if not isinstance(tx['messages'], list):
@@ -142,7 +141,6 @@ class ScamScannerChecker:
                 
             for msg in tx['messages']:
                 if isinstance(msg, dict):
-                    # Add transaction context to each message
                     msg_with_context = msg.copy()
                     msg_with_context['tx_hash'] = tx.get('hash', '')
                     msg_with_context['block_number'] = tx.get('block_number', '')
@@ -150,6 +148,104 @@ class ScamScannerChecker:
                     all_messages.append(msg_with_context)
         
         return pd.DataFrame(all_messages)
+
+    def extract_message_types(self):
+        """Extract and count message types from transactions"""
+        if self.df.empty or "messages" not in self.df.columns:
+            return pd.Series()
+        
+        all_message_types = []
+        
+        for _, tx in self.df.iterrows():
+            messages = tx['messages']
+            
+            # Handle different message formats
+            if isinstance(messages, str):
+                # Try to parse string representation
+                try:
+                    messages_list = eval(messages)
+                    if isinstance(messages_list, list):
+                        for msg in messages_list:
+                            if isinstance(msg, dict) and 'type' in msg:
+                                all_message_types.append(msg['type'])
+                except:
+                    continue
+            elif isinstance(messages, list):
+                # Direct list of messages
+                for msg in messages:
+                    if isinstance(msg, dict) and 'type' in msg:
+                        all_message_types.append(msg['type'])
+        
+        # Count message types and return top 10
+        if all_message_types:
+            message_type_counts = pd.Series(all_message_types).value_counts()
+            return message_type_counts.head(10)
+        else:
+            return pd.Series()
+
+    def extract_dapp_info(self, logs_data):
+        """Extract dApp information from transaction logs"""
+        dapp_info = {
+            'contracts': set(),
+            'actions': set(),
+            'dapp_name': 'Unknown'
+        }
+        
+        try:
+            if isinstance(logs_data, str):
+                try:
+                    logs = eval(logs_data)
+                except:
+                    return dapp_info
+            else:
+                logs = logs_data
+            
+            # Common dApp contracts and their names
+            dapp_contracts = {
+                'inj15ckgh6kdqg0x5p7curamjvqrsdw4cdzz5ky9v6': 'Helix Protocol',
+                'inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm': 'Some Token Contract',
+                'inj1cc6v7luq08p74h2nlrd6j5lcu0t8jqyg3gqt8j': 'Talis Protocol',
+                'inj1v77y5ttah96dc9qkcpc88ad7rce8n88e99t3m5': 'Talis Protocol',
+                'inj1uq453kp4yda7ruc0axpmd9vzfm0fj62padhe0p': 'Hydro Protocol',
+                'inj18xg2xfhv36v4z7dr3ldqnm43fzukqgsafyyg63': 'Fee Recipient'
+            }
+            
+            for log in logs:
+                if not isinstance(log, dict):
+                    continue
+                    
+                events = log.get('events', [])
+                for event in events:
+                    if not isinstance(event, dict):
+                        continue
+                    
+                    # Extract contract addresses
+                    attributes = event.get('attributes', [])
+                    for attr in attributes:
+                        if not isinstance(attr, dict):
+                            continue
+                            
+                        key = attr.get('key', '')
+                        value = attr.get('value', '')
+                        
+                        if key == '_contract_address' and value:
+                            dapp_info['contracts'].add(value)
+                            # Try to identify dApp name
+                            if value in dapp_contracts:
+                                dapp_info['dapp_name'] = dapp_contracts[value]
+                        
+                        # Extract actions
+                        if key == 'action' and value:
+                            dapp_info['actions'].add(value)
+            
+            # Convert sets to lists for easier handling
+            dapp_info['contracts'] = list(dapp_info['contracts'])
+            dapp_info['actions'] = list(dapp_info['actions'])
+            
+        except Exception as e:
+            print(f"Error extracting dApp info: {e}")
+        
+        return dapp_info
 
     def analyze_transactions(self):
         """Perform comprehensive analysis of transactions"""
@@ -167,31 +263,25 @@ class ScamScannerChecker:
             except:
                 return '', {}
 
-        # Extract message type and details
         self.df[['msg_type', 'msg_value']] = self.df['messages'].apply(
             lambda x: pd.Series(extract_message_info(x))
         )
 
-        # Function to extract recipient addresses
         def extract_recipients(logs_data):
             recipients = set()
             try:
-                # Handle both string representation and actual list
                 if isinstance(logs_data, str):
                     try:
-                        # Try to parse the string as JSON/list
                         logs = eval(logs_data)
                     except:
                         return list(recipients)
                 else:
                     logs = logs_data
                 
-                # Process the logs
                 for log in logs:
                     if not isinstance(log, dict):
                         continue
                         
-                    # Check if events exist in the log
                     events = log.get('events', [])
                     for event in events:
                         if not isinstance(event, dict):
@@ -208,15 +298,12 @@ class ScamScannerChecker:
                             if not key or not value:
                                 continue
                             
-                            # Look for addresses in various attributes
                             if key in ['recipient', 'receiver', 'to', 'from', 'sender', 'spender']:
                                 recipients.add(value)
                             
-                            # Also check for contract addresses
                             if key == '_contract_address':
                                 recipients.add(value)
         
-                # Remove the current address from recipients
                 if self.address in recipients:
                     recipients.remove(self.address)
                     
@@ -227,6 +314,15 @@ class ScamScannerChecker:
 
         # Extract recipients from logs
         self.df['recipients'] = self.df['logs'].apply(extract_recipients)
+
+        # Extract dApp information from logs
+        print("\nExtracting dApp information...")
+        self.df['dapp_info'] = self.df['logs'].apply(self.extract_dapp_info)
+        
+        # Extract individual dApp components for analysis
+        self.df['dapp_contracts'] = self.df['dapp_info'].apply(lambda x: x.get('contracts', []))
+        self.df['dapp_actions'] = self.df['dapp_info'].apply(lambda x: x.get('actions', []))
+        self.df['dapp_name'] = self.df['dapp_info'].apply(lambda x: x.get('dapp_name', 'Unknown'))
 
         # Known legitimate contracts (you can expand this list)
         known_contracts = {
@@ -295,7 +391,36 @@ class ScamScannerChecker:
         self.df['month'] = pd.to_datetime(self.df['block_timestamp']).dt.to_period('M')
         monthly_counts = self.df.groupby('month').size()
 
+        # Count dApp usage
+        dapp_counts = self.df['dapp_name'].value_counts()
+        
+        # Get all contracts used
+        all_contracts = []
+        for contracts in self.df['dapp_contracts']:
+            all_contracts.extend(contracts)
+        
+        contract_counts = pd.Series(all_contracts).value_counts()
+        
+        # Get all actions performed
+        all_actions = []
+        for actions in self.df['dapp_actions']:
+            all_actions.extend(actions)
+        
+        action_counts = pd.Series(all_actions).value_counts()
+
         # Print results
+        print("="*80)
+        print("DAPP USAGE ANALYSIS")
+        print("="*80)
+        print(f"\nTop dApps used:")
+        print(dapp_counts.head(10).to_string())
+        
+        print(f"\nTop contracts interacted with:")
+        print(contract_counts.head(10).to_string())
+        
+        print(f"\nTop actions performed:")
+        print(action_counts.head(10).to_string())
+
         print("="*80)
         print("SUSPICIOUS TRANSACTIONS ANALYSIS")
         print("="*80)
@@ -317,15 +442,18 @@ class ScamScannerChecker:
         print(recipient_counts.head(20))
 
         print("\n" + "="*80)
-        print("TOP 10 MOST USED dAPPS")
-        print("="*80)
-        dapp_counts = self.df['dapp'].value_counts()
-        print(dapp_counts.head(10))
-
-        print("\n" + "="*80)
         print("MONTHLY TRANSACTION COUNT")
         print("="*80)
         print(monthly_counts)
+
+        print("\n" + "="*80)
+        print("TOP 10 MESSAGE TYPES")
+        print("="*80)
+        message_type_counts = self.extract_message_types()
+        if not message_type_counts.empty:
+            print(message_type_counts.to_string())
+        else:
+            print("No message types found")
 
 if __name__ == "__main__":
     address = "inj14rmguhlul3p30ntsnjph48nd5y2pqx2qwwf4u9"
