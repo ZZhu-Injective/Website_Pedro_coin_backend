@@ -1,9 +1,0 @@
-{
-  "success_count": 0,
-  "error_count": 0,
-  "transactions": [],
-  "stats": {
-    "total_time": 0.0020399093627929688,
-    "transactions_per_second": 0.0
-  }
-}
