@@ -1,7 +1,9 @@
 import requests
 import time
 import pandas as pd
-from typing import List, Dict
+import json
+from typing import List, Dict, Any
+from datetime import datetime
 
 class ScamScannerChecker:
     def __init__(self, address: str):
@@ -10,6 +12,7 @@ class ScamScannerChecker:
         self.df = pd.DataFrame()
         self.range_size = 100 
         self.current_block = 0
+        self.analysis_results = {}
     
     def fetch_sequential_ranges(self) -> pd.DataFrame:
         while True:
@@ -55,7 +58,6 @@ class ScamScannerChecker:
         """Process transactions into a DataFrame"""
         df = pd.DataFrame(transactions)
         
-        # Convert timestamp
         if 'block_timestamp' in df.columns:
             df['block_timestamp'] = pd.to_datetime(
                 df['block_timestamp'].str.replace(' UTC', ''),
@@ -69,14 +71,12 @@ class ScamScannerChecker:
                     errors='coerce'
                 )
         
-        # Convert numeric columns - fixed to handle errors properly
         numeric_cols = ['block_number', 'gas_used', 'gas_wanted', 'fee']
         for col in numeric_cols:
             if col in df.columns:
                 try:
                     df[col] = pd.to_numeric(df[col])
                 except (ValueError, TypeError):
-                    # If conversion fails, keep original values but log the issue
                     print(f"Warning: Could not convert column '{col}' to numeric")
         
         return df
@@ -159,9 +159,7 @@ class ScamScannerChecker:
         for _, tx in self.df.iterrows():
             messages = tx['messages']
             
-            # Handle different message formats
             if isinstance(messages, str):
-                # Try to parse string representation
                 try:
                     messages_list = eval(messages)
                     if isinstance(messages_list, list):
@@ -171,12 +169,10 @@ class ScamScannerChecker:
                 except:
                     continue
             elif isinstance(messages, list):
-                # Direct list of messages
                 for msg in messages:
                     if isinstance(msg, dict) and 'type' in msg:
                         all_message_types.append(msg['type'])
         
-        # Count message types and return top 10
         if all_message_types:
             message_type_counts = pd.Series(all_message_types).value_counts()
             return message_type_counts.head(10)
@@ -200,7 +196,6 @@ class ScamScannerChecker:
             else:
                 logs = logs_data
             
-            # Common dApp contracts and their names
             dapp_contracts = {
                 'inj15ckgh6kdqg0x5p7curamjvqrsdw4cdzz5ky9v6': 'Helix Protocol',
                 'inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm': 'Some Token Contract',
@@ -219,7 +214,6 @@ class ScamScannerChecker:
                     if not isinstance(event, dict):
                         continue
                     
-                    # Extract contract addresses
                     attributes = event.get('attributes', [])
                     for attr in attributes:
                         if not isinstance(attr, dict):
@@ -230,15 +224,12 @@ class ScamScannerChecker:
                         
                         if key == '_contract_address' and value:
                             dapp_info['contracts'].add(value)
-                            # Try to identify dApp name
                             if value in dapp_contracts:
                                 dapp_info['dapp_name'] = dapp_contracts[value]
                         
-                        # Extract actions
                         if key == 'action' and value:
                             dapp_info['actions'].add(value)
             
-            # Convert sets to lists for easier handling
             dapp_info['contracts'] = list(dapp_info['contracts'])
             dapp_info['actions'] = list(dapp_info['actions'])
             
@@ -247,12 +238,42 @@ class ScamScannerChecker:
         
         return dapp_info
 
-    def analyze_transactions(self):
-        """Perform comprehensive analysis of transactions"""
+    def analyze_transactions(self) -> Dict[str, Any]:
+        """Perform comprehensive analysis of transactions and return results as JSON"""
         if self.df.empty:
-            print("No transactions to analyze")
-            return
+            return {"error": "No transactions to analyze"}
         
+        # Prepare basic info
+        self.analysis_results = {
+            "address": self.address,
+            "total_transactions": len(self.df),
+            "first_transaction_date": None,
+            "last_transaction_date": None,
+            "block_range": {},
+            "transaction_types": {},
+            "dapp_usage": {},
+            "contracts_interacted": {},
+            "actions_performed": {},
+            "suspicious_transactions": [],
+            "top_recipients": [],
+            "monthly_activity": {},
+            "message_types": {},
+            "risk_score": 0
+        }
+        
+        if not self.df.empty and 'block_timestamp' in self.df.columns:
+            self.analysis_results["first_transaction_date"] = self.df['block_timestamp'].min().strftime('%Y-%m-%d %H:%M:%S')
+            self.analysis_results["last_transaction_date"] = self.df['block_timestamp'].max().strftime('%Y-%m-%d %H:%M:%S')
+        
+        if 'block_number' in self.df.columns and not self.df.empty:
+            self.analysis_results["block_range"] = {
+                "min": int(self.df['block_number'].min()),
+                "max": int(self.df['block_number'].max())
+            }
+        
+        if 'tx_type' in self.df.columns:
+            self.analysis_results["transaction_types"] = self.df['tx_type'].value_counts().to_dict()
+
         def extract_message_info(message_str):
             try:
                 if isinstance(message_str, str) and message_str.startswith('['):
@@ -312,65 +333,65 @@ class ScamScannerChecker:
             
             return list(recipients)
 
-        # Extract recipients from logs
         self.df['recipients'] = self.df['logs'].apply(extract_recipients)
 
-        # Extract dApp information from logs
-        print("\nExtracting dApp information...")
         self.df['dapp_info'] = self.df['logs'].apply(self.extract_dapp_info)
         
-        # Extract individual dApp components for analysis
         self.df['dapp_contracts'] = self.df['dapp_info'].apply(lambda x: x.get('contracts', []))
         self.df['dapp_actions'] = self.df['dapp_info'].apply(lambda x: x.get('actions', []))
         self.df['dapp_name'] = self.df['dapp_info'].apply(lambda x: x.get('dapp_name', 'Unknown'))
 
-        # Known legitimate contracts (you can expand this list)
         known_contracts = {
-            'inj15ckgh6kdqg0x5p7curamjvqrsdw4cdzz5ky9v6',  # Common swap contract
-            'inj1v77y5ttah96dc9qkcpc88ad7rce8n88e99t3m5',  # Talis protocol
-            'inj1uq453kp4yda7ruc0axpmd9vzfm0fj62padhe0p'   # Another common contract
+            'inj15ckgh6kdqg0x5p7curamjvqrsdw4cdzz5ky9v6',  
+            'inj1v77y5ttah96dc9qkcpc88ad7rce8n88e99t3m5', 
+            'inj1uq453kp4yda7ruc0axpmd9vzfm0fj62padhe0p'
         }
 
-        # Function to identify suspicious transactions
         def is_suspicious(tx):
             suspicious_flags = []
+            risk_score = 0
             
-            # High gas fees
             if 'gas_fee' in tx and isinstance(tx['gas_fee'], dict):
                 if 'amount' in tx['gas_fee'] and isinstance(tx['gas_fee']['amount'], list):
                     for amt in tx['gas_fee']['amount']:
-                        if amt['denom'] == 'inj' and float(amt['amount']) > 1000000000000000:  # > 0.001 INJ
+                        if amt['denom'] == 'inj' and float(amt['amount']) > 1000000000000000: 
                             suspicious_flags.append('High gas fee')
+                            risk_score += 20
             
-            # Multi-send transactions (often airdrops or scam distributions)
             if '/cosmos.bank.v1beta1.MsgMultiSend' in str(tx.get('messages', '')):
                 suspicious_flags.append('Multi-send transaction')
+                risk_score += 15
             
-            # Unknown contracts
             if 'msg_value' in tx and isinstance(tx['msg_value'], dict):
                 contract = tx['msg_value'].get('contract', '')
                 if contract and contract not in known_contracts:
                     suspicious_flags.append('Unknown contract')
+                    risk_score += 25
             
-            # Small amounts to many addresses (potential dusting attack)
             if len(tx.get('recipients', [])) > 10:
                 suspicious_flags.append('Many recipients')
+                risk_score += 10
             
-            return suspicious_flags
+            return suspicious_flags, risk_score
 
-        # Identify suspicious transactions
-        self.df['suspicious_flags'] = self.df.apply(is_suspicious, axis=1)
+        self.df[['suspicious_flags', 'risk_score']] = self.df.apply(
+            lambda x: pd.Series(is_suspicious(x)), axis=1
+        )
         self.df['is_suspicious'] = self.df['suspicious_flags'].apply(lambda x: len(x) > 0)
 
-        # Get all recipient addresses
+        if not self.df.empty:
+            self.analysis_results["risk_score"] = int(self.df['risk_score'].mean())
+        
         all_recipients = []
         for recipients in self.df['recipients']:
             all_recipients.extend(recipients)
 
-        # Count transactions per address
         recipient_counts = pd.Series(all_recipients).value_counts()
+        self.analysis_results["top_recipients"] = [
+            {"address": addr, "count": int(count)} 
+            for addr, count in recipient_counts.head(20).items()
+        ]
 
-        # Extract dApp information from message types
         def extract_dapp(msg_type):
             if 'wasm' in msg_type:
                 return 'CosmWasm'
@@ -387,77 +408,62 @@ class ScamScannerChecker:
 
         self.df['dapp'] = self.df['msg_type'].apply(extract_dapp)
 
-        # Monthly transaction count
         self.df['month'] = pd.to_datetime(self.df['block_timestamp']).dt.to_period('M')
         monthly_counts = self.df.groupby('month').size()
+        self.analysis_results["monthly_activity"] = {
+            str(month): int(count) for month, count in monthly_counts.items()
+        }
 
-        # Count dApp usage
         dapp_counts = self.df['dapp_name'].value_counts()
+        self.analysis_results["dapp_usage"] = {
+            dapp: int(count) for dapp, count in dapp_counts.head(10).items()
+        }
         
-        # Get all contracts used
         all_contracts = []
         for contracts in self.df['dapp_contracts']:
             all_contracts.extend(contracts)
         
         contract_counts = pd.Series(all_contracts).value_counts()
+        self.analysis_results["contracts_interacted"] = {
+            contract: int(count) for contract, count in contract_counts.head(10).items()
+        }
         
-        # Get all actions performed
         all_actions = []
         for actions in self.df['dapp_actions']:
             all_actions.extend(actions)
         
         action_counts = pd.Series(all_actions).value_counts()
+        self.analysis_results["actions_performed"] = {
+            action: int(count) for action, count in action_counts.head(10).items()
+        }
 
-        # Print results
-        print("="*80)
-        print("DAPP USAGE ANALYSIS")
-        print("="*80)
-        print(f"\nTop dApps used:")
-        print(dapp_counts.head(10).to_string())
-        
-        print(f"\nTop contracts interacted with:")
-        print(contract_counts.head(10).to_string())
-        
-        print(f"\nTop actions performed:")
-        print(action_counts.head(10).to_string())
-
-        print("="*80)
-        print("SUSPICIOUS TRANSACTIONS ANALYSIS")
-        print("="*80)
-
+        # Extract suspicious transactions
         suspicious_txs = self.df[self.df['is_suspicious']]
-        if len(suspicious_txs) > 0:
-            print(f"\nFound {len(suspicious_txs)} potentially suspicious transactions:")
-            for _, tx in suspicious_txs.iterrows():
-                print(f"\nBlock {tx['block_number']} - {tx['block_timestamp']}")
-                print(f"Type: {tx['msg_type']}")
-                print(f"Flags: {', '.join(tx['suspicious_flags'])}")
-                print(f"Hash: {tx['hash']}")
-        else:
-            print("\nNo suspicious transactions found.")
+        for _, tx in suspicious_txs.iterrows():
+            self.analysis_results["suspicious_transactions"].append({
+                "block_number": int(tx['block_number']),
+                "timestamp": tx['block_timestamp'].strftime('%Y-%m-%d %H:%M:%S'),
+                "type": tx['msg_type'],
+                "flags": tx['suspicious_flags'],
+                "hash": tx['hash'],
+                "risk_score": int(tx['risk_score'])
+            })
 
-        print("\n" + "="*80)
-        print("TOP 20 MOST TRANSACTED WALLETS")
-        print("="*80)
-        print(recipient_counts.head(20))
-
-        print("\n" + "="*80)
-        print("MONTHLY TRANSACTION COUNT")
-        print("="*80)
-        print(monthly_counts)
-
-        print("\n" + "="*80)
-        print("TOP 10 MESSAGE TYPES")
-        print("="*80)
+        # Extract message types
         message_type_counts = self.extract_message_types()
         if not message_type_counts.empty:
-            print(message_type_counts.to_string())
-        else:
-            print("No message types found")
+            self.analysis_results["message_types"] = {
+                msg_type: int(count) for msg_type, count in message_type_counts.items()
+            }
+
+        return self.analysis_results
 
 if __name__ == "__main__":
     address = "inj14rmguhlul3p30ntsnjph48nd5y2pqx2qwwf4u9"
     fetcher = ScamScannerChecker(address)
     df = fetcher.fetch_sequential_ranges()
     
-    fetcher.analyze_transactions()
+    results = fetcher.analyze_transactions()
+    
+    # Print the results as JSON
+    print(json.dumps(results, indent=2))
