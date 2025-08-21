@@ -17,7 +17,7 @@ from .ABpedro_talent_web_retrieve import TalentDatabase
 from .AApedro_burned_notif_discord import PedroTokenBurnNotifier
 from .ACpedro_show_token_burn_web import TokenVerifier
 from .ACpedro_info_token_burn_web import PedroTokenInfo
-
+from .ADpedro_scam_checker_web import ScamScannerChecker
 # Oldest Version of the Backend
 from .injective_wallet_info import InjectiveWalletInfo
 from .injective_token_info import InjectiveTokenInfo
@@ -83,11 +83,21 @@ async def pedro_burn_info(request):
         return json_response({'error': str(e)}, status=500)
 
 
+"""
+Show wallet info, some important statistics you need.
+"""
 
-
-
-
-
+@csrf_exempt
+def wallet_info(request, address):
+    try:
+        wallet_checker = ScamScannerChecker(address)
+        df = wallet_checker.fetch_sequential_ranges()
+        results = wallet_checker.analyze_transactions()
+        
+        return JsonResponse(results, safe=False)
+        
+    except Exception as e:
+        logger.error(f"Error fetching walletinfo: {str(e)}", exc_info=True)
 
 
 

@@ -12,7 +12,7 @@ urlpatterns = [
     path('talent_submit/<str:address>/', views.talent_submit, name='talent_submit'),
     path('talent_update/<str:address>/', views.talent_update, name='talent_update'),
     path('token_balances/<str:address>/', views.token_balances, name='token_balances'),
-
+    path('walletinfo/<str:address>/', views.wallet_info, name='wallet_info'),
 
 
 
