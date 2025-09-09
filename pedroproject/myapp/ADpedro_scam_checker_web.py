@@ -352,10 +352,6 @@ class ScamScannerChecker:
             risk_score = 0
             
             
-            if len(tx.get('recipients', [])) > 10:
-                suspicious_flags.append('Many recipients')
-                risk_score += 10
-            
             return suspicious_flags, risk_score
 
         self.df[['suspicious_flags', 'risk_score']] = self.df.apply(
