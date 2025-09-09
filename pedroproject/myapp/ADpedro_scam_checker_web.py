@@ -349,7 +349,7 @@ class ScamScannerChecker:
 
         def is_suspicious(tx):
             suspicious_flags = []
-            risk_score = 0
+            risk_score = 1
             
             
             return suspicious_flags, risk_score
