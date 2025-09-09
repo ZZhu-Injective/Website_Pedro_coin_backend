@@ -351,22 +351,6 @@ class ScamScannerChecker:
             suspicious_flags = []
             risk_score = 0
             
-            if 'gas_fee' in tx and isinstance(tx['gas_fee'], dict):
-                if 'amount' in tx['gas_fee'] and isinstance(tx['gas_fee']['amount'], list):
-                    for amt in tx['gas_fee']['amount']:
-                        if amt['denom'] == 'inj' and float(amt['amount']) > 1000000000000000: 
-                            suspicious_flags.append('High gas fee')
-                            risk_score += 20
-            
-            if '/cosmos.bank.v1beta1.MsgMultiSend' in str(tx.get('messages', '')):
-                suspicious_flags.append('Multi-send transaction')
-                risk_score += 15
-            
-            if 'msg_value' in tx and isinstance(tx['msg_value'], dict):
-                contract = tx['msg_value'].get('contract', '')
-                if contract and contract not in known_contracts:
-                    suspicious_flags.append('Unknown contract')
-                    risk_score += 25
             
             if len(tx.get('recipients', [])) > 10:
                 suspicious_flags.append('Many recipients')
@@ -437,7 +421,6 @@ class ScamScannerChecker:
             action: int(count) for action, count in action_counts.head(10).items()
         }
 
-        # Extract suspicious transactions
         suspicious_txs = self.df[self.df['is_suspicious']]
         for _, tx in suspicious_txs.iterrows():
             self.analysis_results["suspicious_transactions"].append({
@@ -458,12 +441,12 @@ class ScamScannerChecker:
 
         return self.analysis_results
 
-if __name__ == "__main__":
-    address = "inj14rmguhlul3p30ntsnjph48nd5y2pqx2qwwf4u9"
-    fetcher = ScamScannerChecker(address)
-    df = fetcher.fetch_sequential_ranges()
-    
-    results = fetcher.analyze_transactions()
-    
-    # Print the results as JSON
-    print(json.dumps(results, indent=2))
+#if __name__ == "__main__":
+#    address = "inj1qhaep35lrr0ux4l0xxqnfdrjteepqw0njeff92"
+#    fetcher = ScamScannerChecker(address)
+#    df = fetcher.fetch_sequential_ranges()
+#    
+#    results = fetcher.analyze_transactions()
+#    
+#    # Print the results as JSON
+#    print(json.dumps(results, indent=2))
