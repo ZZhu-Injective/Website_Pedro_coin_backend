@@ -378,27 +378,26 @@ class ScamScannerChecker:
 
         def is_suspicious(tx):
             suspicious_flags = []
-            risk_score = 1
+            risk_score = 1  # Base risk score
             
             # Check for interactions with known scam addresses
             scam_interactions = [addr for addr in tx['recipients'] if addr in self.scam_addresses]
             if scam_interactions:
                 suspicious_flags.append(f"Interacted with known scam address(es): {', '.join(scam_interactions)}")
-                risk_score += 20 * len(scam_interactions)  # Significant risk increase for scam interactions
+                risk_score = 10  # Maximum risk score for scam interactions
             
-            # Check for unknown contracts
-            unknown_contracts = [addr for addr in tx['dapp_contracts'] if addr not in known_contracts]
-            if unknown_contracts:
-                suspicious_flags.append(f"Interacted with unknown contract(s): {', '.join(unknown_contracts)}")
-                risk_score += 5 * len(unknown_contracts)
-            
-            # Check for high gas usage
-            if 'gas_used' in tx and tx['gas_used'] > 500000:  # Arbitrary threshold
-                suspicious_flags.append(f"High gas usage: {tx['gas_used']}")
-                risk_score += 3
-            
-            # Cap risk score at 10
-            risk_score = min(risk_score, 10)
+            # Only check other factors if no scam interaction was found
+            elif risk_score < 10:
+                # Check for unknown contracts
+                unknown_contracts = [addr for addr in tx['dapp_contracts'] if addr not in known_contracts]
+                if unknown_contracts:
+                    suspicious_flags.append(f"Interacted with unknown contract(s): {', '.join(unknown_contracts)}")
+                    risk_score = min(risk_score + 5 * len(unknown_contracts), 8)
+                
+                # Check for high gas usage
+                if 'gas_used' in tx and tx['gas_used'] > 500000:  # Arbitrary threshold
+                    suspicious_flags.append(f"High gas usage: {tx['gas_used']}")
+                    risk_score = min(risk_score + 3, 8)
             
             return suspicious_flags, risk_score
 
@@ -427,8 +426,17 @@ class ScamScannerChecker:
         self.analysis_results["scam_interaction_details"] = scam_interaction_details
 
         if not self.df.empty:
-            # Cap overall risk score at 10
-            overall_risk_score = min(int(self.df['risk_score'].mean()), 10)
+            # Calculate weighted risk score based on scam interactions
+            if scam_interaction_count > 0:
+                # If there are scam interactions, the risk score should be high
+                scam_percentage = min(scam_interaction_count / len(self.df) * 2, 1.0)  # Cap at 100%
+                overall_risk_score = max(6, int(10 * scam_percentage))  # Minimum 6 if any scam interactions
+            else:
+                # For non-scam transactions, use the average
+                overall_risk_score = int(self.df['risk_score'].mean())
+            
+            # Cap at 10
+            overall_risk_score = min(overall_risk_score, 10)
             self.analysis_results["risk_score"] = overall_risk_score
         
         all_recipients = []
@@ -497,7 +505,6 @@ class ScamScannerChecker:
                 "risk_score": int(tx['risk_score'])
             })
 
-        # Extract message types
         message_type_counts = self.extract_message_types()
         if not message_type_counts.empty:
             self.analysis_results["message_types"] = {
