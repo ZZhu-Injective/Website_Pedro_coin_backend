@@ -286,7 +286,8 @@ class ScamScannerChecker:
             "message_types": {},
             "risk_score": 0,
             "scam_interactions": 0,
-            "scam_addresses_loaded": len(self.scam_addresses)
+            "scam_addresses_loaded": len(self.scam_addresses),
+            "scam_interaction_details": []
         }
         
         if not self.df.empty and 'block_timestamp' in self.df.columns:
@@ -396,6 +397,9 @@ class ScamScannerChecker:
                 suspicious_flags.append(f"High gas usage: {tx['gas_used']}")
                 risk_score += 3
             
+            # Cap risk score at 10
+            risk_score = min(risk_score, 10)
+            
             return suspicious_flags, risk_score
 
         self.df[['suspicious_flags', 'risk_score']] = self.df.apply(
@@ -403,15 +407,29 @@ class ScamScannerChecker:
         )
         self.df['is_suspicious'] = self.df['suspicious_flags'].apply(lambda x: len(x) > 0)
         
-        # Count scam interactions
+        # Count scam interactions and collect details
         scam_interaction_count = 0
-        for recipients in self.df['recipients']:
-            scam_interaction_count += sum(1 for addr in recipients if addr in self.scam_addresses)
+        scam_interaction_details = []
+        
+        for _, tx in self.df.iterrows():
+            scam_addresses_in_tx = [addr for addr in tx['recipients'] if addr in self.scam_addresses]
+            if scam_addresses_in_tx:
+                scam_interaction_count += len(scam_addresses_in_tx)
+                scam_interaction_details.append({
+                    "block_number": int(tx['block_number']),
+                    "timestamp": tx['block_timestamp'].strftime('%Y-%m-%d %H:%M:%S'),
+                    "hash": tx['hash'],
+                    "scam_addresses": scam_addresses_in_tx,
+                    "risk_score": int(tx['risk_score'])
+                })
         
         self.analysis_results["scam_interactions"] = scam_interaction_count
+        self.analysis_results["scam_interaction_details"] = scam_interaction_details
 
         if not self.df.empty:
-            self.analysis_results["risk_score"] = int(self.df['risk_score'].mean())
+            # Cap overall risk score at 10
+            overall_risk_score = min(int(self.df['risk_score'].mean()), 10)
+            self.analysis_results["risk_score"] = overall_risk_score
         
         all_recipients = []
         for recipients in self.df['recipients']:
