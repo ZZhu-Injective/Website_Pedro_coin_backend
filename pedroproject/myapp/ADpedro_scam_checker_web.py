@@ -2,17 +2,43 @@ import requests
 import time
 import pandas as pd
 import json
+import os
 from typing import List, Dict, Any
 from datetime import datetime
 
 class ScamScannerChecker:
-    def __init__(self, address: str):
+    def __init__(self, address: str, scam_wallet_file: str = None):
         self.address = address
         self.base_url = f"https://sentry.exchange.grpc-web.injective.network/api/explorer/v1/accountTxs/{address}"
         self.df = pd.DataFrame()
         self.range_size = 100 
         self.current_block = 0
         self.analysis_results = {}
+        
+        # Set default path if not provided
+        if scam_wallet_file is None:
+            # Use the path you provided
+            scam_wallet_file = r"C:\Users\zonwi\Documents\GitHub\Website_Pedro_coin_backend\pedroproject\myapp\ADpedro_scam_wallet.json"
+        
+        # Load scam addresses from JSON file
+        self.scam_addresses = self._load_scam_addresses(scam_wallet_file)
+    
+    def _load_scam_addresses(self, scam_wallet_file: str) -> List[str]:
+        """Load scam addresses from JSON file"""
+        try:
+            # Check if file exists
+            if not os.path.exists(scam_wallet_file):
+                print(f"Warning: Scam wallet file not found at {scam_wallet_file}")
+                return []
+                
+            with open(scam_wallet_file, 'r') as f:
+                data = json.load(f)
+                scam_addresses = data.get("scam_addresses", [])
+                print(f"Loaded {len(scam_addresses)} scam addresses from {scam_wallet_file}")
+                return scam_addresses
+        except (FileNotFoundError, json.JSONDecodeError, PermissionError) as e:
+            print(f"Warning: Could not load scam addresses from {scam_wallet_file}: {e}")
+            return []
     
     def fetch_sequential_ranges(self) -> pd.DataFrame:
         while True:
@@ -258,7 +284,9 @@ class ScamScannerChecker:
             "top_recipients": [],
             "monthly_activity": {},
             "message_types": {},
-            "risk_score": 0
+            "risk_score": 0,
+            "scam_interactions": 0,
+            "scam_addresses_loaded": len(self.scam_addresses)
         }
         
         if not self.df.empty and 'block_timestamp' in self.df.columns:
@@ -351,6 +379,22 @@ class ScamScannerChecker:
             suspicious_flags = []
             risk_score = 1
             
+            # Check for interactions with known scam addresses
+            scam_interactions = [addr for addr in tx['recipients'] if addr in self.scam_addresses]
+            if scam_interactions:
+                suspicious_flags.append(f"Interacted with known scam address(es): {', '.join(scam_interactions)}")
+                risk_score += 20 * len(scam_interactions)  # Significant risk increase for scam interactions
+            
+            # Check for unknown contracts
+            unknown_contracts = [addr for addr in tx['dapp_contracts'] if addr not in known_contracts]
+            if unknown_contracts:
+                suspicious_flags.append(f"Interacted with unknown contract(s): {', '.join(unknown_contracts)}")
+                risk_score += 5 * len(unknown_contracts)
+            
+            # Check for high gas usage
+            if 'gas_used' in tx and tx['gas_used'] > 500000:  # Arbitrary threshold
+                suspicious_flags.append(f"High gas usage: {tx['gas_used']}")
+                risk_score += 3
             
             return suspicious_flags, risk_score
 
@@ -358,6 +402,13 @@ class ScamScannerChecker:
             lambda x: pd.Series(is_suspicious(x)), axis=1
         )
         self.df['is_suspicious'] = self.df['suspicious_flags'].apply(lambda x: len(x) > 0)
+        
+        # Count scam interactions
+        scam_interaction_count = 0
+        for recipients in self.df['recipients']:
+            scam_interaction_count += sum(1 for addr in recipients if addr in self.scam_addresses)
+        
+        self.analysis_results["scam_interactions"] = scam_interaction_count
 
         if not self.df.empty:
             self.analysis_results["risk_score"] = int(self.df['risk_score'].mean())
@@ -437,12 +488,12 @@ class ScamScannerChecker:
 
         return self.analysis_results
 
-#if __name__ == "__main__":
-#    address = "inj1qhaep35lrr0ux4l0xxqnfdrjteepqw0njeff92"
-#    fetcher = ScamScannerChecker(address)
-#    df = fetcher.fetch_sequential_ranges()
-#    
-#    results = fetcher.analyze_transactions()
-#    
-#    # Print the results as JSON
-#    print(json.dumps(results, indent=2))
+if __name__ == "__main__":
+    address = "inj1qhaep35lrr0ux4l0xxqnfdrjteepqw0njeff92"
+    fetcher = ScamScannerChecker(address)
+    df = fetcher.fetch_sequential_ranges()
+    
+    results = fetcher.analyze_transactions()
+    
+    # Print the results as JSON
+    print(json.dumps(results, indent=2))
