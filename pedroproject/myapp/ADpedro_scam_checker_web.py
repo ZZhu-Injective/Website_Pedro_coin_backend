@@ -3,7 +3,7 @@ import time
 import pandas as pd
 import json
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from datetime import datetime
 
 class ScamScannerChecker:
@@ -80,54 +80,22 @@ class ScamScannerChecker:
         response.raise_for_status()
         return response.json().get("data", [])
     
-    def _process_transactions(self, transactions: List[Dict]) -> pd.DataFrame:
-        """Process transactions into a DataFrame"""
-        df = pd.DataFrame(transactions)
-        
-        if 'block_timestamp' in df.columns:
-            df['block_timestamp'] = pd.to_datetime(
-                df['block_timestamp'].str.replace(' UTC', ''),
-                format='%Y-%m-%d %H:%M:%S.%f %z',
-                errors='coerce'
-            )
-            
-            if df['block_timestamp'].isna().any():
-                df['block_timestamp'] = pd.to_datetime(
-                    df['block_timestamp'],
-                    errors='coerce'
-                )
-        
-        numeric_cols = ['block_number', 'gas_used', 'gas_wanted', 'fee']
-        for col in numeric_cols:
-            if col in df.columns:
-                try:
-                    df[col] = pd.to_numeric(df[col])
-                except (ValueError, TypeError):
-                    print(f"Warning: Could not convert column '{col}' to numeric")
-        
-        return df
-    
     def _process_batch(self, batch: List[Dict]) -> pd.DataFrame:
         batch_df = pd.DataFrame(batch)
         
         if 'block_timestamp' in batch_df.columns:
+            # Handle timestamp conversion more robustly
             batch_df['block_timestamp'] = pd.to_datetime(
-                batch_df['block_timestamp'].str.replace(' UTC', ''),
+                batch_df['block_timestamp'].astype(str).str.replace(' UTC', ''),
                 format='%Y-%m-%d %H:%M:%S.%f %z',
                 errors='coerce'
             )
-            
-            if batch_df['block_timestamp'].isna().any():
-                batch_df['block_timestamp'] = pd.to_datetime(
-                    batch_df['block_timestamp'],
-                    errors='coerce'
-                )
         
         numeric_cols = ['block_number', 'gas_used', 'gas_wanted', 'fee']
         for col in numeric_cols:
             if col in batch_df.columns:
                 try:
-                    batch_df[col] = pd.to_numeric(batch_df[col])
+                    batch_df[col] = pd.to_numeric(batch_df[col], errors='coerce')
                 except (ValueError, TypeError):
                     batch_df[col] = batch_df[col]
         
@@ -147,33 +115,27 @@ class ScamScannerChecker:
         
         if not self.df.empty:
             print("\nFirst transaction:")
-            print(self.df.iloc[0][['block_number', 'block_timestamp', 'tx_type']].to_string())
+            first_tx = self.df.iloc[0]
+            timestamp_str = self._safe_format_timestamp(first_tx.get('block_timestamp'))
+            print(f"Block: {first_tx.get('block_number')}, Timestamp: {timestamp_str}, Type: {first_tx.get('tx_type')}")
+            
             print("\nLast transaction:")
-            print(self.df.iloc[-1][['block_number', 'block_timestamp', 'tx_type']].to_string())
+            last_tx = self.df.iloc[-1]
+            timestamp_str = self._safe_format_timestamp(last_tx.get('block_timestamp'))
+            print(f"Block: {last_tx.get('block_number')}, Timestamp: {timestamp_str}, Type: {last_tx.get('tx_type')}")
+    
+    def _safe_format_timestamp(self, timestamp) -> str:
+        """Safely format timestamp, handling NaT values"""
+        if pd.isna(timestamp) or timestamp is None:
+            return "Unknown"
+        try:
+            return timestamp.strftime('%Y-%m-%d %H:%M:%S')
+        except (ValueError, AttributeError):
+            return "Invalid timestamp"
     
     def get_transactions(self) -> pd.DataFrame:
         """Returns the cleaned DataFrame"""
         return self.df
-
-    def extract_messages(self) -> pd.DataFrame:
-        """Extract and expand messages from transactions"""
-        if self.df.empty or "messages" not in self.df.columns:
-            return pd.DataFrame()
-            
-        all_messages = []
-        for _, tx in self.df.iterrows():
-            if not isinstance(tx['messages'], list):
-                continue
-                
-            for msg in tx['messages']:
-                if isinstance(msg, dict):
-                    msg_with_context = msg.copy()
-                    msg_with_context['tx_hash'] = tx.get('hash', '')
-                    msg_with_context['block_number'] = tx.get('block_number', '')
-                    msg_with_context['block_timestamp'] = tx.get('block_timestamp', '')
-                    all_messages.append(msg_with_context)
-        
-        return pd.DataFrame(all_messages)
 
     def extract_message_types(self):
         """Extract and count message types from transactions"""
@@ -214,6 +176,10 @@ class ScamScannerChecker:
         }
         
         try:
+            # Handle NaN/float values
+            if pd.isna(logs_data) or not logs_data:
+                return dapp_info
+                
             if isinstance(logs_data, str):
                 try:
                     logs = eval(logs_data)
@@ -222,6 +188,9 @@ class ScamScannerChecker:
             else:
                 logs = logs_data
             
+            if not isinstance(logs, list):
+                return dapp_info
+                
             dapp_contracts = {
                 'inj15ckgh6kdqg0x5p7curamjvqrsdw4cdzz5ky9v6': 'Helix Protocol',
                 'inj1c6lxety9hqn9q4khwqvjcfa24c2qeqvvfsg4fm': 'Some Token Contract',
@@ -260,9 +229,64 @@ class ScamScannerChecker:
             dapp_info['actions'] = list(dapp_info['actions'])
             
         except Exception as e:
-            print(f"Error extracting dApp info: {e}")
+            # Silently handle errors to avoid flooding output
+            pass
         
         return dapp_info
+
+    def extract_recipients(self, logs_data):
+        """Extract recipients from transaction logs"""
+        recipients = set()
+        try:
+            # Handle NaN/float values
+            if pd.isna(logs_data) or not logs_data:
+                return list(recipients)
+                
+            if isinstance(logs_data, str):
+                try:
+                    logs = eval(logs_data)
+                except:
+                    return list(recipients)
+            else:
+                logs = logs_data
+            
+            if not isinstance(logs, list):
+                return list(recipients)
+                
+            for log in logs:
+                if not isinstance(log, dict):
+                    continue
+                    
+                events = log.get('events', [])
+                for event in events:
+                    if not isinstance(event, dict):
+                        continue
+                        
+                    attributes = event.get('attributes', [])
+                    for attr in attributes:
+                        if not isinstance(attr, dict):
+                            continue
+                            
+                        key = attr.get('key', '')
+                        value = attr.get('value', '')
+                        
+                        if not key or not value:
+                            continue
+                        
+                        if key in ['recipient', 'receiver', 'to', 'from', 'sender', 'spender']:
+                            recipients.add(value)
+                        
+                        if key == '_contract_address':
+                            recipients.add(value)
+    
+            if self.address in recipients:
+                recipients.remove(self.address)
+                
+        except Exception as e:
+            # Silently handle errors to avoid flooding output
+            pass
+        
+        return list(recipients)
 
     def analyze_transactions(self) -> Dict[str, Any]:
         """Perform comprehensive analysis of transactions and return results as JSON"""
@@ -291,8 +315,11 @@ class ScamScannerChecker:
         }
         
         if not self.df.empty and 'block_timestamp' in self.df.columns:
-            self.analysis_results["first_transaction_date"] = self.df['block_timestamp'].min().strftime('%Y-%m-%d %H:%M:%S')
-            self.analysis_results["last_transaction_date"] = self.df['block_timestamp'].max().strftime('%Y-%m-%d %H:%M:%S')
+            # Handle NaT values safely
+            valid_timestamps = self.df['block_timestamp'].dropna()
+            if not valid_timestamps.empty:
+                self.analysis_results["first_transaction_date"] = self._safe_format_timestamp(valid_timestamps.min())
+                self.analysis_results["last_transaction_date"] = self._safe_format_timestamp(valid_timestamps.max())
         
         if 'block_number' in self.df.columns and not self.df.empty:
             self.analysis_results["block_range"] = {
@@ -305,6 +332,9 @@ class ScamScannerChecker:
 
         def extract_message_info(message_str):
             try:
+                if pd.isna(message_str) or not message_str:
+                    return '', {}
+                    
                 if isinstance(message_str, str) and message_str.startswith('['):
                     messages = eval(message_str)
                     if messages and len(messages) > 0:
@@ -317,53 +347,10 @@ class ScamScannerChecker:
             lambda x: pd.Series(extract_message_info(x))
         )
 
-        def extract_recipients(logs_data):
-            recipients = set()
-            try:
-                if isinstance(logs_data, str):
-                    try:
-                        logs = eval(logs_data)
-                    except:
-                        return list(recipients)
-                else:
-                    logs = logs_data
-                
-                for log in logs:
-                    if not isinstance(log, dict):
-                        continue
-                        
-                    events = log.get('events', [])
-                    for event in events:
-                        if not isinstance(event, dict):
-                            continue
-                            
-                        attributes = event.get('attributes', [])
-                        for attr in attributes:
-                            if not isinstance(attr, dict):
-                                continue
-                                
-                            key = attr.get('key', '')
-                            value = attr.get('value', '')
-                            
-                            if not key or not value:
-                                continue
-                            
-                            if key in ['recipient', 'receiver', 'to', 'from', 'sender', 'spender']:
-                                recipients.add(value)
-                            
-                            if key == '_contract_address':
-                                recipients.add(value)
+        # Extract recipients safely
+        self.df['recipients'] = self.df['logs'].apply(self.extract_recipients)
         
-                if self.address in recipients:
-                    recipients.remove(self.address)
-                    
-            except Exception as e:
-                print(f"Error extracting recipients: {e}")
-            
-            return list(recipients)
-
-        self.df['recipients'] = self.df['logs'].apply(extract_recipients)
-
+        # Extract dApp info safely
         self.df['dapp_info'] = self.df['logs'].apply(self.extract_dapp_info)
         
         self.df['dapp_contracts'] = self.df['dapp_info'].apply(lambda x: x.get('contracts', []))
@@ -395,7 +382,7 @@ class ScamScannerChecker:
                     risk_score = min(risk_score + 5 * len(unknown_contracts), 8)
                 
                 # Check for high gas usage
-                if 'gas_used' in tx and tx['gas_used'] > 500000:  # Arbitrary threshold
+                if 'gas_used' in tx and not pd.isna(tx['gas_used']) and tx['gas_used'] > 500000:
                     suspicious_flags.append(f"High gas usage: {tx['gas_used']}")
                     risk_score = min(risk_score + 3, 8)
             
@@ -416,8 +403,8 @@ class ScamScannerChecker:
                 scam_interaction_count += len(scam_addresses_in_tx)
                 scam_interaction_details.append({
                     "block_number": int(tx['block_number']),
-                    "timestamp": tx['block_timestamp'].strftime('%Y-%m-%d %H:%M:%S'),
-                    "hash": tx['hash'],
+                    "timestamp": self._safe_format_timestamp(tx.get('block_timestamp')),
+                    "hash": tx.get('hash', 'Unknown'),
                     "scam_addresses": scam_addresses_in_tx,
                     "risk_score": int(tx['risk_score'])
                 })
@@ -429,8 +416,8 @@ class ScamScannerChecker:
             # Calculate weighted risk score based on scam interactions
             if scam_interaction_count > 0:
                 # If there are scam interactions, the risk score should be high
-                scam_percentage = min(scam_interaction_count / len(self.df) * 2, 1.0)  # Cap at 100%
-                overall_risk_score = max(6, int(10 * scam_percentage))  # Minimum 6 if any scam interactions
+                scam_percentage = min(scam_interaction_count / len(self.df) * 2, 1.0)
+                overall_risk_score = max(6, int(10 * scam_percentage))
             else:
                 # For non-scam transactions, use the average
                 overall_risk_score = int(self.df['risk_score'].mean())
@@ -450,6 +437,8 @@ class ScamScannerChecker:
         ]
 
         def extract_dapp(msg_type):
+            if not msg_type:
+                return 'Unknown'
             if 'wasm' in msg_type:
                 return 'CosmWasm'
             elif 'staking' in msg_type:
@@ -465,11 +454,18 @@ class ScamScannerChecker:
 
         self.df['dapp'] = self.df['msg_type'].apply(extract_dapp)
 
-        self.df['month'] = pd.to_datetime(self.df['block_timestamp']).dt.to_period('M')
-        monthly_counts = self.df.groupby('month').size()
-        self.analysis_results["monthly_activity"] = {
-            str(month): int(count) for month, count in monthly_counts.items()
-        }
+        # Handle timezone-aware timestamps for monthly grouping
+        if 'block_timestamp' in self.df.columns and not self.df['block_timestamp'].dropna().empty:
+            try:
+                # Convert to timezone-naive for period conversion
+                self.df['month'] = self.df['block_timestamp'].dt.tz_convert(None).dt.to_period('M')
+                monthly_counts = self.df.groupby('month').size()
+                self.analysis_results["monthly_activity"] = {
+                    str(month): int(count) for month, count in monthly_counts.items()
+                }
+            except:
+                # Fallback if timezone conversion fails
+                self.analysis_results["monthly_activity"] = {"error": "Could not calculate monthly activity"}
 
         dapp_counts = self.df['dapp_name'].value_counts()
         self.analysis_results["dapp_usage"] = {
@@ -498,10 +494,10 @@ class ScamScannerChecker:
         for _, tx in suspicious_txs.iterrows():
             self.analysis_results["suspicious_transactions"].append({
                 "block_number": int(tx['block_number']),
-                "timestamp": tx['block_timestamp'].strftime('%Y-%m-%d %H:%M:%S'),
-                "type": tx['msg_type'],
+                "timestamp": self._safe_format_timestamp(tx.get('block_timestamp')),
+                "type": tx.get('msg_type', 'Unknown'),
                 "flags": tx['suspicious_flags'],
-                "hash": tx['hash'],
+                "hash": tx.get('hash', 'Unknown'),
                 "risk_score": int(tx['risk_score'])
             })
 
@@ -514,11 +510,10 @@ class ScamScannerChecker:
         return self.analysis_results
 
 if __name__ == "__main__":
-    address = "inj1qhaep35lrr0ux4l0xxqnfdrjteepqw0njeff92"
+    address = "inj1x6u08aa3plhk3utjk7wpyjkurtwnwp6dhudh0j"
     fetcher = ScamScannerChecker(address)
     df = fetcher.fetch_sequential_ranges()
     
     results = fetcher.analyze_transactions()
     
-    # Print the results as JSON
     print(json.dumps(results, indent=2))
