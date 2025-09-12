@@ -15,29 +15,22 @@ class ScamScannerChecker:
         self.current_block = 0
         self.analysis_results = {}
         
-        # Set default path if not provided
         if scam_wallet_file is None:
-            # Use the path you provided
             scam_wallet_file = r"C:\Users\zonwi\Documents\GitHub\Website_Pedro_coin_backend\pedroproject\myapp\ADpedro_scam_wallet.json"
         
-        # Load scam addresses from JSON file
         self.scam_addresses = self._load_scam_addresses(scam_wallet_file)
     
     def _load_scam_addresses(self, scam_wallet_file: str) -> List[str]:
         """Load scam addresses from JSON file"""
         try:
-            # Check if file exists
             if not os.path.exists(scam_wallet_file):
-                print(f"Warning: Scam wallet file not found at {scam_wallet_file}")
                 return []
                 
             with open(scam_wallet_file, 'r') as f:
                 data = json.load(f)
                 scam_addresses = data.get("scam_addresses", [])
-                print(f"Loaded {len(scam_addresses)} scam addresses from {scam_wallet_file}")
                 return scam_addresses
         except (FileNotFoundError, json.JSONDecodeError, PermissionError) as e:
-            print(f"Warning: Could not load scam addresses from {scam_wallet_file}: {e}")
             return []
     
     def fetch_sequential_ranges(self) -> pd.DataFrame:
@@ -84,7 +77,6 @@ class ScamScannerChecker:
         batch_df = pd.DataFrame(batch)
         
         if 'block_timestamp' in batch_df.columns:
-            # Handle timestamp conversion more robustly
             batch_df['block_timestamp'] = pd.to_datetime(
                 batch_df['block_timestamp'].astype(str).str.replace(' UTC', ''),
                 format='%Y-%m-%d %H:%M:%S.%f %z',
@@ -229,7 +221,6 @@ class ScamScannerChecker:
             dapp_info['actions'] = list(dapp_info['actions'])
             
         except Exception as e:
-            # Silently handle errors to avoid flooding output
             pass
         
         return dapp_info
@@ -238,7 +229,6 @@ class ScamScannerChecker:
         """Extract recipients from transaction logs"""
         recipients = set()
         try:
-            # Handle NaN/float values
             if pd.isna(logs_data) or not logs_data:
                 return list(recipients)
                 
@@ -283,7 +273,6 @@ class ScamScannerChecker:
                 recipients.remove(self.address)
                 
         except Exception as e:
-            # Silently handle errors to avoid flooding output
             pass
         
         return list(recipients)
@@ -293,7 +282,6 @@ class ScamScannerChecker:
         if self.df.empty:
             return {"error": "No transactions to analyze"}
         
-        # Prepare basic info
         self.analysis_results = {
             "address": self.address,
             "total_transactions": len(self.df),
@@ -315,7 +303,6 @@ class ScamScannerChecker:
         }
         
         if not self.df.empty and 'block_timestamp' in self.df.columns:
-            # Handle NaT values safely
             valid_timestamps = self.df['block_timestamp'].dropna()
             if not valid_timestamps.empty:
                 self.analysis_results["first_transaction_date"] = self._safe_format_timestamp(valid_timestamps.min())
@@ -347,10 +334,8 @@ class ScamScannerChecker:
             lambda x: pd.Series(extract_message_info(x))
         )
 
-        # Extract recipients safely
         self.df['recipients'] = self.df['logs'].apply(self.extract_recipients)
         
-        # Extract dApp info safely
         self.df['dapp_info'] = self.df['logs'].apply(self.extract_dapp_info)
         
         self.df['dapp_contracts'] = self.df['dapp_info'].apply(lambda x: x.get('contracts', []))
@@ -365,27 +350,24 @@ class ScamScannerChecker:
 
         def is_suspicious(tx):
             suspicious_flags = []
-            risk_score = 1  # Base risk score
+            risk_score = 1
             
-            # Check for interactions with known scam addresses
             scam_interactions = [addr for addr in tx['recipients'] if addr in self.scam_addresses]
             if scam_interactions:
                 suspicious_flags.append(f"Interacted with known scam address(es): {', '.join(scam_interactions)}")
-                risk_score = 10  # Maximum risk score for scam interactions
+                risk_score = 10
             
-            # Only check other factors if no scam interaction was found
             elif risk_score < 10:
-                # Check for unknown contracts
-                unknown_contracts = [addr for addr in tx['dapp_contracts'] if addr not in known_contracts]
-                if unknown_contracts:
-                    suspicious_flags.append(f"Interacted with unknown contract(s): {', '.join(unknown_contracts)}")
-                    risk_score = min(risk_score + 5 * len(unknown_contracts), 8)
+                #unknown_contracts = [addr for addr in tx['dapp_contracts'] if addr not in known_contracts]
+                #if unknown_contracts:
+                #    suspicious_flags.append(f"Interacted with unknown contract(s): {', '.join(unknown_contracts)}")
+                #    risk_score = min(risk_score + 5 * len(unknown_contracts), 8)
                 
                 # Check for high gas usage
-                if 'gas_used' in tx and not pd.isna(tx['gas_used']) and tx['gas_used'] > 500000:
-                    suspicious_flags.append(f"High gas usage: {tx['gas_used']}")
-                    risk_score = min(risk_score + 3, 8)
-            
+                #if 'gas_used' in tx and not pd.isna(tx['gas_used']) and tx['gas_used'] > 500000:
+                #    suspicious_flags.append(f"High gas usage: {tx['gas_used']}")
+                #    risk_score = min(risk_score + 3, 8)
+                None            
             return suspicious_flags, risk_score
 
         self.df[['suspicious_flags', 'risk_score']] = self.df.apply(
@@ -393,7 +375,6 @@ class ScamScannerChecker:
         )
         self.df['is_suspicious'] = self.df['suspicious_flags'].apply(lambda x: len(x) > 0)
         
-        # Count scam interactions and collect details
         scam_interaction_count = 0
         scam_interaction_details = []
         
@@ -413,16 +394,12 @@ class ScamScannerChecker:
         self.analysis_results["scam_interaction_details"] = scam_interaction_details
 
         if not self.df.empty:
-            # Calculate weighted risk score based on scam interactions
             if scam_interaction_count > 0:
-                # If there are scam interactions, the risk score should be high
                 scam_percentage = min(scam_interaction_count / len(self.df) * 2, 1.0)
                 overall_risk_score = max(6, int(10 * scam_percentage))
             else:
-                # For non-scam transactions, use the average
                 overall_risk_score = int(self.df['risk_score'].mean())
             
-            # Cap at 10
             overall_risk_score = min(overall_risk_score, 10)
             self.analysis_results["risk_score"] = overall_risk_score
         
@@ -454,17 +431,14 @@ class ScamScannerChecker:
 
         self.df['dapp'] = self.df['msg_type'].apply(extract_dapp)
 
-        # Handle timezone-aware timestamps for monthly grouping
         if 'block_timestamp' in self.df.columns and not self.df['block_timestamp'].dropna().empty:
             try:
-                # Convert to timezone-naive for period conversion
                 self.df['month'] = self.df['block_timestamp'].dt.tz_convert(None).dt.to_period('M')
                 monthly_counts = self.df.groupby('month').size()
                 self.analysis_results["monthly_activity"] = {
                     str(month): int(count) for month, count in monthly_counts.items()
                 }
             except:
-                # Fallback if timezone conversion fails
                 self.analysis_results["monthly_activity"] = {"error": "Could not calculate monthly activity"}
 
         dapp_counts = self.df['dapp_name'].value_counts()
@@ -515,5 +489,6 @@ if __name__ == "__main__":
     df = fetcher.fetch_sequential_ranges()
     
     results = fetcher.analyze_transactions()
+    print(results)
     
-    print(json.dumps(results, indent=2))
+    #print(json.dumps(results, indent=2))
