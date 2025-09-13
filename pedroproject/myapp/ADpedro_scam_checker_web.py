@@ -415,9 +415,37 @@ class ScamScannerChecker:
         def is_suspicious(tx):
             suspicious_flags = []
             risk_score = 1
+                        
+            # Extract message type from the transaction
+            message_type = ''
+            try:
+                if 'msg_type' in tx and tx['msg_type']:
+                    message_type = tx['msg_type']
+                elif 'messages' in tx and tx['messages']:
+                    # Try to extract message type from messages field
+                    messages = tx['messages']
+                    if isinstance(messages, str):
+                        if messages.startswith('['):
+                            try:
+                                messages_list = json.loads(messages)
+                                if messages_list and isinstance(messages_list, list) and len(messages_list) > 0:
+                                    message_type = messages_list[0].get('type', '')
+                            except:
+                                # Fallback to string parsing
+                                if '"type":' in messages:
+                                    message_type = messages.split('"type":')[1].split('"')[1]
+            except:
+                pass
             
-            # Check for scam interactions
-            scam_interactions = [addr for addr in tx['recipients'] if addr in self.scam_addresses]
+            # Check if this is a multi-send transaction
+            is_multi_send = any(keyword in message_type.lower() for keyword in 
+                            ['multisend', 'multi_send', 'multi-send', '/cosmos.bank.v1beta1.MsgMultiSend'])
+            
+            # Check for scam interactions, but exclude if it's a multi-send transaction
+            scam_interactions = []
+            if not is_multi_send:
+                scam_interactions = [addr for addr in tx['recipients'] if addr in self.scam_addresses]
+            
             if scam_interactions:
                 suspicious_flags.append(f"Interacted with known scam address(es): {', '.join(scam_interactions)}")
                 risk_score = 10
