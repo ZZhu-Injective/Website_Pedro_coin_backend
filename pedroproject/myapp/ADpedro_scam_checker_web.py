@@ -483,12 +483,12 @@ class ScamScannerChecker:
 
         return self.analysis_results
 
-if __name__ == "__main__":
-    address = "inj1x6u08aa3plhk3utjk7wpyjkurtwnwp6dhudh0j"
-    fetcher = ScamScannerChecker(address)
-    df = fetcher.fetch_sequential_ranges()
-    
-    results = fetcher.analyze_transactions()
-    print(results)
-    
-    #print(json.dumps(results, indent=2))
+#if __name__ == "__main__":
+#    address = "inj1x6u08aa3plhk3utjk7wpyjkurtwnwp6dhudh0j"
+#    fetcher = ScamScannerChecker(address)
+#    df = fetcher.fetch_sequential_ranges()
+#    
+#    results = fetcher.analyze_transactions()
+#    print(results)
+#    
+#    #print(json.dumps(results, indent=2))

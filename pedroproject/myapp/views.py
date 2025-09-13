@@ -18,6 +18,7 @@ from .AApedro_burned_notif_discord import PedroTokenBurnNotifier
 from .ACpedro_show_token_burn_web import TokenVerifier
 from .ACpedro_info_token_burn_web import PedroTokenInfo
 from .ADpedro_scam_checker_web import ScamScannerChecker
+
 # Oldest Version of the Backend
 from .injective_wallet_info import InjectiveWalletInfo
 from .injective_token_info import InjectiveTokenInfo
@@ -94,6 +95,8 @@ def wallet_info(request, address):
         df = wallet_checker.fetch_sequential_ranges()
         results = wallet_checker.analyze_transactions()
         
+        print(results)
+
         return JsonResponse(results, safe=False)
         
     except Exception as e:
