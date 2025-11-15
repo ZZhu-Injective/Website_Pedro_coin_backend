@@ -11,7 +11,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 """
-Talent pool where u submit it. The bot will send information to our discord and we can approve it or reject it!
+Talent pool where u submit it. 
+1. The bot will send information to our discord and we can approve it or reject it!
+2. The bot will also handle update requests for existing talents.
+
+-> In The future: Further we also can call the exisitng data and we can change it directly from discord!
 """
 
 class TalentHubBot:

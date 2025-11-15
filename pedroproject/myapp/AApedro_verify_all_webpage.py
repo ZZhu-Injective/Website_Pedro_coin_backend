@@ -9,8 +9,8 @@ from pyinjective.client.model.pagination import PaginationOption
 """
 Before diving into the dapps, make sure youre eligible to use them. Here's what you need:
 
-- Hold at least 100,000 $PEDRO tokens
-- Own 1 $PEDRO NFTs
+- Hold at least 100,000 $PEDRO tokens (in native)
+- Own 1 $PEDRO NFTs and at least 1 $PEDRO token (in native)
 
 These assets unlock features across our ecosystem and give you full access to participating dapps.
 """
