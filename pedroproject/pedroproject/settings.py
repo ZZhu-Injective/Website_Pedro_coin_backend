@@ -103,10 +103,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     'http://68.183.1.248',
     "http://localhost:3000",
-    "https://www.injectivepedro.com/",
-    "https://www.api.injectivepedro.com/",
-    "https://art.injectivepedro.com/",
-    "https://job.injectivepedro.com/",
-    "https://burn.injectivepedro.com/",
-    "https://scam.injectivepedro.com/",
+    "https://www.injectivepedro.com",
+    "https://www.api.injectivepedro.com",
+    "https://art.injectivepedro.com",
+    "https://job.injectivepedro.com",
+    "https://burn.injectivepedro.com",
+    "https://scam.injectivepedro.com",
+    "https://board.injectivepedro.com",
 ]

@@ -14,6 +14,8 @@ from .AApedro_verify_all_webpage import PedroLogin
 from .ABpedro_talent_submission_update import talent_hub_bot
 from .ABpedro_talent_web_confirmed import TalentDataReaders
 from .ABpedro_talent_web_retrieve import TalentDatabase
+from .ABpedro_marketplace_retrieve import MarketplaceDataReader
+
 from .AApedro_burned_notif_discord import PedroTokenBurnNotifier
 from .ACpedro_show_token_burn_web import TokenVerifier
 from .ACpedro_info_token_burn_web import PedroTokenInfo
@@ -103,19 +105,9 @@ def wallet_info(request, address):
         logger.error(f"Error fetching walletinfo: {str(e)}", exc_info=True)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+"""
+Talent submission, retrieve and update views.
+"""
 
 @csrf_exempt
 async def talent_submit(request, address):
@@ -149,23 +141,7 @@ async def talent(request):
         return json_response(info)
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
-
-@csrf_exempt
-async def token_burn_notification(request):
-    if request.method != 'POST':
-        return json_response({'error': 'Method not allowed'}, status=405)
-
-    try:
-        data = json.loads(request.body.decode('utf-8'))
-        notifier = PedroTokenBurnNotifier()
-        result = await notifier.process_burn_transaction(
-            burn_data=data.get('burn_data', {}),
-        )
-        return json_response({'status': result})
     
-    except Exception as e:
-        logger.error(f"Burn notification error: {str(e)}", exc_info=True)
-        return json_response({'error': 'Internal server error'}, status=500)
 
 def retrieve(request, address):
     try:
@@ -233,6 +209,59 @@ async def talent_update(request, address):
             status=500
         )
 
+"""
+Marketplace retrieval view.
+"""
+
+async def marketplace(request):
+    try:
+        market = MarketplaceDataReader()
+        info = market.read_approved_market()
+        return json_response(info)
+    except Exception as e:
+        return json_response({'error': str(e)}, status=500)
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@csrf_exempt
+async def token_burn_notification(request):
+    if request.method != 'POST':
+        return json_response({'error': 'Method not allowed'}, status=405)
+
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        notifier = PedroTokenBurnNotifier()
+        result = await notifier.process_burn_transaction(
+            burn_data=data.get('burn_data', {}),
+        )
+        return json_response({'status': result})
+    
+    except Exception as e:
+        logger.error(f"Burn notification error: {str(e)}", exc_info=True)
+        return json_response({'error': 'Internal server error'}, status=500)
+
+
+
 async def token_balances(request, address):
     try:
         token_checker = TokenVerifier(address)
@@ -249,6 +278,9 @@ async def token_balances(request, address):
         return json_response({'error': str(e)}, status=500)
     
 
+"""
+Marketplace retrieval view.
+"""
 
 
 

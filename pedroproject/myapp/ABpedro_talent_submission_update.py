@@ -1,11 +1,12 @@
 import os
 import asyncio
 import discord
+import pandas as pd
 from discord.ext import commands
 from discord.ui import Button, View, Modal, TextInput
 from openpyxl import Workbook, load_workbook
 from datetime import datetime
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,7 +16,10 @@ Talent pool where u submit it.
 1. The bot will send information to our discord and we can approve it or reject it!
 2. The bot will also handle update requests for existing talents.
 
--> In The future: Further we also can call the exisitng data and we can change it directly from discord!
+Commands added:
+/show - Show all records with names and wallet addresses
+/change <wallet_address> <column_name> <new_value> - Change a specific field
+/remove <wallet_address> - Remove a record by wallet address
 """
 
 class TalentHubBot:
@@ -37,14 +41,18 @@ class TalentHubBot:
         self.pending_submissions: Dict[str, dict] = {}
         self.pending_updates: Dict[str, dict] = {}
         self.loop = asyncio.new_event_loop()
-        self.excel_file = "1.Atalent_submissions.xlsx"
+        self.excel_file = "Atalent_submissions.xlsx"
         self.bot_code = os.getenv("DISCORD_BOT")
-
         
         self._ensure_excel_file()
         
         self.bot.event(self.on_ready)
         self.bot.event(self.on_interaction)
+        
+        # Register slash commands
+        self.bot.tree.command(name="show")(self.show_command)
+        self.bot.tree.command(name="change")(self.change_command)
+        self.bot.tree.command(name="remove")(self.remove_command)
     
     def _ensure_excel_file(self):
         if not os.path.exists(self.excel_file):
@@ -101,6 +109,364 @@ class TalentHubBot:
         except Exception as e:
             print(f"Error searching Database: {e}")
             return None
+    
+    async def _get_excel_dataframe(self) -> pd.DataFrame:
+        """Load Excel data into a pandas DataFrame"""
+        try:
+            df = pd.read_excel(self.excel_file)
+            return df
+        except Exception as e:
+            print(f"Error loading Excel file: {e}")
+            return pd.DataFrame()
+    
+    async def _save_dataframe_to_excel(self, df: pd.DataFrame):
+        """Save DataFrame back to Excel"""
+        try:
+            df.to_excel(self.excel_file, index=False)
+            return True
+        except Exception as e:
+            print(f"Error saving Excel file: {e}")
+            return False
+    
+    async def _get_all_records(self) -> List[Tuple[str, str]]:
+        """Get all wallet addresses and names"""
+        try:
+            wb = load_workbook(self.excel_file)
+            ws = wb.active
+            
+            records = []
+            for row in range(2, ws.max_row + 1):
+                name = ws[f'A{row}'].value
+                wallet = ws[f'Q{row}'].value
+                if name and wallet:
+                    records.append((name, wallet))
+            return records
+        except Exception as e:
+            print(f"Error getting all records: {e}")
+            return []
+    
+    async def _delete_record(self, wallet_address: str) -> bool:
+        """Delete a record by wallet address"""
+        try:
+            wb = load_workbook(self.excel_file)
+            ws = wb.active
+            
+            row = await self._find_submission_row(wallet_address)
+            if not row:
+                return False
+            
+            # Delete the row
+            ws.delete_rows(row)
+            wb.save(self.excel_file)
+            return True
+            
+        except Exception as e:
+            print(f"Error deleting record: {e}")
+            return False
+    
+    async def _update_single_field(self, wallet_address: str, column_name: str, new_value: str) -> bool:
+        """Update a single field in a record"""
+        try:
+            # Column mapping
+            column_map = {
+                'Name': 'A',
+                'Role': 'B',
+                'Injective Role': 'C',
+                'Experience': 'D',
+                'Education': 'E',
+                'Location': 'F',
+                'Availability': 'G',
+                'Monthly Rate': 'H',
+                'Skills': 'I',
+                'Languages': 'J',
+                'Discord': 'K',
+                'Email': 'L',
+                'Phone': 'M',
+                'Telegram': 'N',
+                'X': 'O',
+                'Github': 'P',
+                'Wallet Type': 'R',
+                'NFT Holdings': 'S',
+                'Token Holdings': 'T',
+                'Portfolio': 'U',
+                'CV': 'V',
+                'Image url': 'W',
+                'Bio': 'X',
+                'Status': 'Z'
+            }
+            
+            if column_name not in column_map:
+                return False
+            
+            wb = load_workbook(self.excel_file)
+            ws = wb.active
+            
+            row = await self._find_submission_row(wallet_address)
+            if not row:
+                return False
+            
+            # Update the cell
+            col = column_map[column_name]
+            ws[f'{col}{row}'] = new_value
+            
+            # Update submission date
+            ws[f'Y{row}'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            wb.save(self.excel_file)
+            return True
+            
+        except Exception as e:
+            print(f"Error updating field: {e}")
+            return False
+    
+    async def _get_record_details(self, wallet_address: str) -> Optional[dict]:
+        """Get complete record details for a wallet"""
+        try:
+            wb = load_workbook(self.excel_file)
+            ws = wb.active
+            
+            row = await self._find_submission_row(wallet_address)
+            if not row:
+                return None
+            
+            record = {}
+            columns = [
+                ('Name', 'A'), ('Role', 'B'), ('Injective Role', 'C'),
+                ('Experience', 'D'), ('Education', 'E'), ('Location', 'F'),
+                ('Availability', 'G'), ('Monthly Rate', 'H'), ('Skills', 'I'),
+                ('Languages', 'J'), ('Discord', 'K'), ('Email', 'L'),
+                ('Phone', 'M'), ('Telegram', 'N'), ('X', 'O'),
+                ('Github', 'P'), ('Wallet Address', 'Q'), ('Wallet Type', 'R'),
+                ('NFT Holdings', 'S'), ('Token Holdings', 'T'), ('Portfolio', 'U'),
+                ('CV', 'V'), ('Image url', 'W'), ('Bio', 'X'), ('Status', 'Z')
+            ]
+            
+            for col_name, col_letter in columns:
+                value = ws[f'{col_letter}{row}'].value
+                record[col_name] = value if value is not None else "N/A"
+            
+            return record
+            
+        except Exception as e:
+            print(f"Error getting record details: {e}")
+            return None
+    
+    async def show_command(self, interaction: discord.Interaction):
+        """Show all records in the database"""
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            records = await self._get_all_records()
+            
+            if not records:
+                await interaction.followup.send("❌ No records found in the database.", ephemeral=True)
+                return
+            
+            # Create paginated embeds
+            embeds = []
+            records_per_page = 15
+            
+            for i in range(0, len(records), records_per_page):
+                embed = discord.Embed(
+                    title="📊 Talent Database Records",
+                    description=f"Showing {i+1}-{min(i+records_per_page, len(records))} of {len(records)} records",
+                    color=discord.Color.blue()
+                )
+                
+                page_records = records[i:i+records_per_page]
+                for name, wallet in page_records:
+                    embed.add_field(
+                        name=f"👤 {name}",
+                        value=f"`{wallet}`",
+                        inline=True
+                    )
+                
+                embed.set_footer(text=f"Database: {self.excel_file}")
+                embeds.append(embed)
+            
+            # Send first page
+            await interaction.followup.send(embed=embeds[0], ephemeral=True)
+            
+            # If multiple pages, send additional pages
+            if len(embeds) > 1:
+                for embed in embeds[1:]:
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+            
+        except Exception as e:
+            print(f"Error in show command: {e}")
+            await interaction.followup.send(
+                "❌ An error occurred while fetching records.",
+                ephemeral=True
+            )
+    
+    async def change_command(self, interaction: discord.Interaction, wallet_address: str, column_name: str, new_value: str):
+        """Change a specific field for a wallet address"""
+        await interaction.response.defer(ephemeral=True)
+        
+        # Validate column name
+        valid_columns = [
+            'Name', 'Role', 'Injective Role', 'Experience', 'Education',
+            'Location', 'Availability', 'Monthly Rate', 'Skills', 'Languages',
+            'Discord', 'Email', 'Phone', 'Telegram', 'X', 'Github',
+            'Wallet Type', 'NFT Holdings', 'Token Holdings', 'Portfolio',
+            'CV', 'Image url', 'Bio', 'Status'
+        ]
+        
+        if column_name not in valid_columns:
+            await interaction.followup.send(
+                f"❌ Invalid column name. Valid columns are:\n{', '.join(valid_columns)}",
+                ephemeral=True
+            )
+            return
+        
+        # Check if record exists
+        row = await self._find_submission_row(wallet_address)
+        if not row:
+            await interaction.followup.send(
+                f"❌ No record found for wallet address: `{wallet_address}`",
+                ephemeral=True
+            )
+            return
+        
+        # Get old value for logging
+        record = await self._get_record_details(wallet_address)
+        if not record:
+            await interaction.followup.send(
+                "❌ Could not retrieve record details.",
+                ephemeral=True
+            )
+            return
+        
+        old_value = record.get(column_name, "N/A")
+        
+        # Update the field
+        success = await self._update_single_field(wallet_address, column_name, new_value)
+        
+        if success:
+            embed = discord.Embed(
+                title="✅ Field Updated Successfully",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Wallet Address", value=f"`{wallet_address}`", inline=False)
+            embed.add_field(name="Field", value=column_name, inline=True)
+            embed.add_field(name="Old Value", value=str(old_value)[:100], inline=True)
+            embed.add_field(name="New Value", value=str(new_value)[:100], inline=True)
+            embed.set_footer(text=f"Updated by {interaction.user.name}")
+            
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            
+            # Also send to submission channel
+            try:
+                channel = self.bot.get_channel(self.submission_channel_id)
+                if channel:
+                    admin_embed = discord.Embed(
+                        title="🔄 Manual Field Update",
+                        description=f"Field updated by {interaction.user.mention}",
+                        color=discord.Color.orange()
+                    )
+                    admin_embed.add_field(name="Wallet", value=f"`{wallet_address}`", inline=False)
+                    admin_embed.add_field(name="Field", value=column_name, inline=True)
+                    admin_embed.add_field(name="Old Value", value=str(old_value)[:50], inline=True)
+                    admin_embed.add_field(name="New Value", value=str(new_value)[:50], inline=True)
+                    await channel.send(embed=admin_embed)
+            except Exception as e:
+                print(f"Error notifying channel: {e}")
+        else:
+            await interaction.followup.send(
+                "❌ Failed to update the field. Please check the inputs and try again.",
+                ephemeral=True
+            )
+    
+    async def remove_command(self, interaction: discord.Interaction, wallet_address: str):
+        """Remove a record by wallet address"""
+        await interaction.response.defer(ephemeral=True)
+        
+        # Check if record exists
+        row = await self._find_submission_row(wallet_address)
+        if not row:
+            await interaction.followup.send(
+                f"❌ No record found for wallet address: `{wallet_address}`",
+                ephemeral=True
+            )
+            return
+        
+        # Get record details for confirmation
+        record = await self._get_record_details(wallet_address)
+        if not record:
+            await interaction.followup.send(
+                "❌ Could not retrieve record details.",
+                ephemeral=True
+            )
+            return
+        
+        # Create confirmation embed
+        embed = discord.Embed(
+            title="⚠️ Confirm Deletion",
+            description=f"You are about to delete the record for:\n**{record.get('Name', 'Unknown')}**",
+            color=discord.Color.red()
+        )
+        embed.add_field(name="Wallet Address", value=f"`{wallet_address}`", inline=False)
+        embed.add_field(name="Role", value=record.get('Role', 'N/A'), inline=True)
+        embed.add_field(name="Status", value=record.get('Status', 'N/A'), inline=True)
+        embed.set_footer(text="This action cannot be undone!")
+        
+        # Create confirmation view
+        class ConfirmView(View):
+            def __init__(self, bot_instance, wallet):
+                super().__init__(timeout=60)
+                self.bot_instance = bot_instance
+                self.wallet = wallet
+                self.confirmed = False
+            
+            @discord.ui.button(label="✅ Confirm Delete", style=discord.ButtonStyle.danger)
+            async def confirm_delete(self, interaction: discord.Interaction, button: Button):
+                self.confirmed = True
+                
+                # Delete the record
+                success = await self.bot_instance._delete_record(self.wallet)
+                
+                if success:
+                    embed = discord.Embed(
+                        title="✅ Record Deleted Successfully",
+                        description=f"Record for wallet `{self.wallet}` has been deleted.",
+                        color=discord.Color.red()
+                    )
+                    await interaction.response.edit_message(embed=embed, view=None)
+                    
+                    # Notify submission channel
+                    try:
+                        channel = self.bot_instance.bot.get_channel(self.bot_instance.submission_channel_id)
+                        if channel:
+                            admin_embed = discord.Embed(
+                                title="🗑️ Record Deleted",
+                                description=f"Record deleted by {interaction.user.mention}",
+                                color=discord.Color.red()
+                            )
+                            admin_embed.add_field(name="Wallet Address", value=f"`{self.wallet}`", inline=False)
+                            admin_embed.add_field(name="Name", value=record.get('Name', 'Unknown'), inline=True)
+                            await channel.send(embed=admin_embed)
+                    except Exception as e:
+                        print(f"Error notifying channel: {e}")
+                else:
+                    await interaction.response.edit_message(
+                        content="❌ Failed to delete the record.",
+                        embed=None,
+                        view=None
+                    )
+                
+                self.stop()
+            
+            @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
+            async def cancel(self, interaction: discord.Interaction, button: Button):
+                await interaction.response.edit_message(
+                    content="❌ Deletion cancelled.",
+                    embed=None,
+                    view=None
+                )
+                self.stop()
+        
+        view = ConfirmView(self, wallet_address)
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
     
     async def _update_excel_status(self, wallet_address: str, new_status: str) -> bool:
         try:
@@ -262,6 +628,11 @@ class TalentHubBot:
     
     async def on_ready(self):
         print(f'✅ Bot logged in as {self.bot.user}')
+        try:
+            synced = await self.bot.tree.sync()
+            print(f"✅ Synced {len(synced)} command(s)")
+        except Exception as e:
+            print(f"❌ Error syncing commands: {e}")
     
     async def on_interaction(self, interaction: discord.Interaction):
         if interaction.type != discord.InteractionType.component:
@@ -754,5 +1125,6 @@ class UpdateChangesModal(Modal, title="Edit Update Request"):
                 "⚠️ Changes requested but failed to update Database status!",
                 ephemeral=True
             )
+
 
 talent_hub_bot = TalentHubBot()

@@ -33,7 +33,7 @@ class PedroTokenBurnNotifier:
         self.network = Network.mainnet()
         self.client = AsyncClient(self.network)
         self.discord_webhook_url = os.getenv("DISCORD_BURN_WEBHOOK")
-        self.role_id = "1362554186574594248"
+        self.role_id = "1340790768360755281"
         self.explorer_base_url = "https://explorer.injective.network/transaction"
 
     def _format_amount(self, amount: str) -> str:

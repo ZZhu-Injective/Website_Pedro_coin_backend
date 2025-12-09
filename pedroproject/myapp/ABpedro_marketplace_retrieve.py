@@ -2,27 +2,25 @@ import os
 import pandas as pd
 from datetime import datetime
 
-#Get info from database about the talented people.
+#Get info from database about the marketplace items.
 
-class TalentDataReaders:
+class MarketplaceDataReader:
     def __init__(self, file_path=None):
         if file_path is None:
-            self.file_path = os.path.join('Atalent_submissions.xlsx')
+            self.file_path = os.path.join('Amarketplace_submissions.xlsx')
         else:
             self.file_path = file_path
 
-    def read_approved_talents(self):
+    def read_approved_market(self):
+
         if not os.path.exists(self.file_path):
             raise FileNotFoundError(f"The file {self.file_path} does not exist.")
 
         df = pd.read_excel(self.file_path)
 
         required_columns = [
-            "Name", "Role", "Injective Role", "Experience", "Education", "Location",
-            "Availability", "Monthly Rate", "Skills", "Languages", "Discord", "Email",
-            "Phone", "Telegram", "X", "Github", "Wallet Address", "Wallet Type",
-            "NFT Holdings", "Token Holdings", "Portfolio", "CV", "Image url", "Bio",
-            "Submission date", "Status"
+            "id","WalletAddress","title","description","category","price","skills","images",
+            "sellerName","discordTag","createdAt","Views","Status"
         ]
 
         missing_columns = [col for col in required_columns if col not in df.columns]
