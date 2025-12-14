@@ -20,6 +20,13 @@ Commands added:
 /show - Show all records with names and wallet addresses
 /change <wallet_address> <column_name> <new_value> - Change a specific field
 /remove <wallet_address> - Remove a record by wallet address
+/column_names - Show all variable columns
+
+Prefix commands also available:
+!show - Show all records.
+!column_names - Show all variable columns.
+!change <wallet_address> <column_name> <new_value> - Change a field
+!remove <wallet_address> - Remove a record
 """
 
 class TalentHubBot:
@@ -53,6 +60,24 @@ class TalentHubBot:
         self.bot.tree.command(name="show")(self.show_command)
         self.bot.tree.command(name="change")(self.change_command)
         self.bot.tree.command(name="remove")(self.remove_command)
+        self.bot.tree.command(name="column_names")(self.column_names_command)
+        
+        # Register prefix commands
+        @self.bot.command(name="show")
+        async def show_prefix(ctx):
+            await self.show_prefix_command(ctx)
+            
+        @self.bot.command(name="change")
+        async def change_prefix(ctx, wallet_address: str, column_name: str, *, new_value: str):
+            await self.change_prefix_command(ctx, wallet_address, column_name, new_value)
+            
+        @self.bot.command(name="remove")
+        async def remove_prefix(ctx, wallet_address: str):
+            await self.remove_prefix_command(ctx, wallet_address)
+            
+        @self.bot.command(name="column_names")
+        async def column_names_prefix(ctx):
+            await self.column_names_prefix_command(ctx)
     
     def _ensure_excel_file(self):
         if not os.path.exists(self.excel_file):
@@ -251,15 +276,150 @@ class TalentHubBot:
             print(f"Error getting record details: {e}")
             return None
     
+    async def column_names_command(self, interaction: discord.Interaction):
+        """Show all available column names (slash command)"""
+        # Respond immediately
+        await interaction.response.send_message("Fetching column names...", ephemeral=False)
+        
+        try:
+            valid_columns = [
+                'Name', 'Role', 'Injective Role', 'Experience', 'Education',
+                'Location', 'Availability', 'Monthly Rate', 'Skills', 'Languages',
+                'Discord', 'Email', 'Phone', 'Telegram', 'X', 'Github',
+                'Wallet Type', 'NFT Holdings', 'Token Holdings', 'Portfolio',
+                'CV', 'Image url', 'Bio', 'Status'
+            ]
+            
+            # Create embed
+            embed = discord.Embed(
+                title="Available Column Names",
+                description="These are the columns you can modify using the /change command:",
+                color=discord.Color.blue()
+            )
+            
+            # Add columns in organized groups
+            embed.add_field(
+                name="Basic Information",
+                value="• Name\n• Role\n• Injective Role\n• Experience\n• Education\n• Location\n• Availability\n• Monthly Rate",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Skills & Languages",
+                value="• Skills\n• Languages",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Contact Information",
+                value="• Discord\n• Email\n• Phone\n• Telegram\n• X\n• Github",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Blockchain Details",
+                value="• Wallet Type\n• NFT Holdings\n• Token Holdings",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Portfolio & Media",
+                value="• Portfolio\n• CV\n• Image url\n• Bio",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Status",
+                value="• Status",
+                inline=True
+            )
+            
+            embed.set_footer(text="Use /change <wallet> <column> <value> to modify these fields")
+            
+            # Send the embed publicly
+            await interaction.followup.send(embed=embed)
+            
+        except Exception as e:
+            print(f"Error in column_names command: {e}")
+            await interaction.followup.send(
+                "An error occurred while fetching column names.",
+                ephemeral=False
+            )
+    
+    async def column_names_prefix_command(self, ctx: commands.Context):
+        """Show all available column names (prefix command)"""
+        try:
+            valid_columns = [
+                'Name', 'Role', 'Injective Role', 'Experience', 'Education',
+                'Location', 'Availability', 'Monthly Rate', 'Skills', 'Languages',
+                'Discord', 'Email', 'Phone', 'Telegram', 'X', 'Github',
+                'Wallet Type', 'NFT Holdings', 'Token Holdings', 'Portfolio',
+                'CV', 'Image url', 'Bio', 'Status'
+            ]
+            
+            # Create embed
+            embed = discord.Embed(
+                title="Available Column Names",
+                description="These are the columns you can modify using the !change command:",
+                color=discord.Color.blue()
+            )
+            
+            # Add columns in organized groups
+            embed.add_field(
+                name="Basic Information",
+                value="• Name\n• Role\n• Injective Role\n• Experience\n• Education\n• Location\n• Availability\n• Monthly Rate",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Skills & Languages",
+                value="• Skills\n• Languages",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Contact Information",
+                value="• Discord\n• Email\n• Phone\n• Telegram\n• X\n• Github",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Blockchain Details",
+                value="• Wallet Type\n• NFT Holdings\n• Token Holdings",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Portfolio & Media",
+                value="• Portfolio\n• CV\n• Image url\n• Bio",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Status",
+                value="• Status",
+                inline=True
+            )
+            
+            embed.set_footer(text="Use !change <wallet> <column> <value> to modify these fields")
+            
+            # Send the embed
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            print(f"Error in column_names prefix command: {e}")
+            await ctx.send("An error occurred while fetching column names.")
+    
     async def show_command(self, interaction: discord.Interaction):
-        """Show all records in the database"""
-        await interaction.response.defer(ephemeral=True)
+        """Show all records in the database (slash command)"""
+        # Respond immediately to avoid timeout
+        await interaction.response.send_message("Fetching records from the database...", ephemeral=False)
         
         try:
             records = await self._get_all_records()
             
             if not records:
-                await interaction.followup.send("❌ No records found in the database.", ephemeral=True)
+                await interaction.followup.send("No records found in the database.", ephemeral=False)
                 return
             
             # Create paginated embeds
@@ -268,7 +428,7 @@ class TalentHubBot:
             
             for i in range(0, len(records), records_per_page):
                 embed = discord.Embed(
-                    title="📊 Talent Database Records",
+                    title=f"Talent Database Records",
                     description=f"Showing {i+1}-{min(i+records_per_page, len(records))} of {len(records)} records",
                     color=discord.Color.blue()
                 )
@@ -276,7 +436,7 @@ class TalentHubBot:
                 page_records = records[i:i+records_per_page]
                 for name, wallet in page_records:
                     embed.add_field(
-                        name=f"👤 {name}",
+                        name=f"{name}",
                         value=f"`{wallet}`",
                         inline=True
                     )
@@ -284,26 +444,69 @@ class TalentHubBot:
                 embed.set_footer(text=f"Database: {self.excel_file}")
                 embeds.append(embed)
             
-            # Send first page
-            await interaction.followup.send(embed=embeds[0], ephemeral=True)
+            # Send the first embed
+            await interaction.followup.send(embed=embeds[0])
             
-            # If multiple pages, send additional pages
+            # Send additional embeds if there are more
             if len(embeds) > 1:
                 for embed in embeds[1:]:
-                    await interaction.followup.send(embed=embed, ephemeral=True)
+                    await interaction.followup.send(embed=embed)
             
         except Exception as e:
             print(f"Error in show command: {e}")
             await interaction.followup.send(
-                "❌ An error occurred while fetching records.",
-                ephemeral=True
+                "An error occurred while fetching records.",
+                ephemeral=False
             )
     
-    async def change_command(self, interaction: discord.Interaction, wallet_address: str, column_name: str, new_value: str):
-        """Change a specific field for a wallet address"""
-        await interaction.response.defer(ephemeral=True)
+    async def show_prefix_command(self, ctx: commands.Context):
+        """Show all records in the database (prefix command)"""
+        loading_msg = await ctx.send("Loading records...")
         
-        # Validate column name
+        try:
+            records = await self._get_all_records()
+            
+            if not records:
+                await loading_msg.edit(content="No records found in the database.")
+                return
+            
+            embeds = []
+            records_per_page = 15
+            
+            for i in range(0, len(records), records_per_page):
+                embed = discord.Embed(
+                    title="Talent Database Records",
+                    description=f"Showing {i+1}-{min(i+records_per_page, len(records))} of {len(records)} records",
+                    color=discord.Color.blue()
+                )
+                
+                page_records = records[i:i+records_per_page]
+                for name, wallet in page_records:
+                    embed.add_field(
+                        name=f"{name}",
+                        value=f"`{wallet}`",
+                        inline=True
+                    )
+                
+                embeds.append(embed)
+            
+            await loading_msg.delete()
+            
+            first_msg = await ctx.send(embed=embeds[0])
+            
+            if len(embeds) > 1:
+                for embed in embeds[1:]:
+                    await ctx.send(embed=embed)
+            
+        except Exception as e:
+            print(f"Error in show prefix command: {e}")
+            await loading_msg.edit(content="An error occurred while fetching records.")
+    
+    async def change_command(self, interaction: discord.Interaction, wallet_address: str, column_name: str, new_value: str):
+        """Change a specific field for a wallet address (slash command)"""
+        # Respond immediately
+        await interaction.response.send_message(f"Updating {column_name} for wallet {wallet_address[:6]}...", ephemeral=False)
+        
         valid_columns = [
             'Name', 'Role', 'Injective Role', 'Experience', 'Education',
             'Location', 'Availability', 'Monthly Rate', 'Skills', 'Languages',
@@ -314,8 +517,8 @@ class TalentHubBot:
         
         if column_name not in valid_columns:
             await interaction.followup.send(
-                f"❌ Invalid column name. Valid columns are:\n{', '.join(valid_columns)}",
-                ephemeral=True
+                f"Invalid column name. Valid columns are:\n{', '.join(valid_columns)}",
+                ephemeral=False
             )
             return
         
@@ -323,8 +526,8 @@ class TalentHubBot:
         row = await self._find_submission_row(wallet_address)
         if not row:
             await interaction.followup.send(
-                f"❌ No record found for wallet address: `{wallet_address}`",
-                ephemeral=True
+                f"No record found for wallet address: `{wallet_address}`",
+                ephemeral=False
             )
             return
         
@@ -332,8 +535,8 @@ class TalentHubBot:
         record = await self._get_record_details(wallet_address)
         if not record:
             await interaction.followup.send(
-                "❌ Could not retrieve record details.",
-                ephemeral=True
+                "Could not retrieve record details.",
+                ephemeral=False
             )
             return
         
@@ -344,7 +547,7 @@ class TalentHubBot:
         
         if success:
             embed = discord.Embed(
-                title="✅ Field Updated Successfully",
+                title="Field Updated Successfully",
                 color=discord.Color.green()
             )
             embed.add_field(name="Wallet Address", value=f"`{wallet_address}`", inline=False)
@@ -353,14 +556,14 @@ class TalentHubBot:
             embed.add_field(name="New Value", value=str(new_value)[:100], inline=True)
             embed.set_footer(text=f"Updated by {interaction.user.name}")
             
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed)
             
             # Also send to submission channel
             try:
                 channel = self.bot.get_channel(self.submission_channel_id)
                 if channel:
                     admin_embed = discord.Embed(
-                        title="🔄 Manual Field Update",
+                        title="Manual Field Update",
                         description=f"Field updated by {interaction.user.mention}",
                         color=discord.Color.orange()
                     )
@@ -373,20 +576,91 @@ class TalentHubBot:
                 print(f"Error notifying channel: {e}")
         else:
             await interaction.followup.send(
-                "❌ Failed to update the field. Please check the inputs and try again.",
-                ephemeral=True
+                "Failed to update the field. Please check the inputs and try again.",
+                ephemeral=False
             )
     
+    async def change_prefix_command(self, ctx: commands.Context, wallet_address: str, column_name: str, new_value: str):
+        """Change a specific field for a wallet address (prefix command)"""
+        # Validate column name
+        valid_columns = [
+            'Name', 'Role', 'Injective Role', 'Experience', 'Education',
+            'Location', 'Availability', 'Monthly Rate', 'Skills', 'Languages',
+            'Discord', 'Email', 'Phone', 'Telegram', 'X', 'Github',
+            'Wallet Type', 'NFT Holdings', 'Token Holdings', 'Portfolio',
+            'CV', 'Image url', 'Bio', 'Status'
+        ]
+        
+        if column_name not in valid_columns:
+            await ctx.send(
+                f"Invalid column name. Valid columns are:\n{', '.join(valid_columns)}"
+            )
+            return
+        
+        # Check if record exists
+        row = await self._find_submission_row(wallet_address)
+        if not row:
+            await ctx.send(f"No record found for wallet address: `{wallet_address}`")
+            return
+        
+        # Get old value for logging
+        record = await self._get_record_details(wallet_address)
+        if not record:
+            await ctx.send("Could not retrieve record details.")
+            return
+        
+        old_value = record.get(column_name, "N/A")
+        
+        # Send processing message
+        processing_msg = await ctx.send("Updating field...")
+        
+        # Update the field
+        success = await self._update_single_field(wallet_address, column_name, new_value)
+        
+        if success:
+            embed = discord.Embed(
+                title="Field Updated Successfully",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Wallet Address", value=f"`{wallet_address}`", inline=False)
+            embed.add_field(name="Field", value=column_name, inline=True)
+            embed.add_field(name="Old Value", value=str(old_value)[:100], inline=True)
+            embed.add_field(name="New Value", value=str(new_value)[:100], inline=True)
+            embed.set_footer(text=f"Updated by {ctx.author.name}")
+            
+            await processing_msg.delete()
+            await ctx.send(embed=embed)
+            
+            # Also send to submission channel
+            try:
+                channel = self.bot.get_channel(self.submission_channel_id)
+                if channel:
+                    admin_embed = discord.Embed(
+                        title="Manual Field Update",
+                        description=f"Field updated by {ctx.author.mention}",
+                        color=discord.Color.orange()
+                    )
+                    admin_embed.add_field(name="Wallet", value=f"`{wallet_address}`", inline=False)
+                    admin_embed.add_field(name="Field", value=column_name, inline=True)
+                    admin_embed.add_field(name="Old Value", value=str(old_value)[:50], inline=True)
+                    admin_embed.add_field(name="New Value", value=str(new_value)[:50], inline=True)
+                    await channel.send(embed=admin_embed)
+            except Exception as e:
+                print(f"Error notifying channel: {e}")
+        else:
+            await processing_msg.edit(content="Failed to update the field. Please check the inputs and try again.")
+    
     async def remove_command(self, interaction: discord.Interaction, wallet_address: str):
-        """Remove a record by wallet address"""
-        await interaction.response.defer(ephemeral=True)
+        """Remove a record by wallet address (slash command)"""
+        # Respond immediately
+        await interaction.response.send_message(f"Preparing to remove record for wallet {wallet_address[:6]}...", ephemeral=False)
         
         # Check if record exists
         row = await self._find_submission_row(wallet_address)
         if not row:
             await interaction.followup.send(
-                f"❌ No record found for wallet address: `{wallet_address}`",
-                ephemeral=True
+                f"No record found for wallet address: `{wallet_address}`",
+                ephemeral=False
             )
             return
         
@@ -394,14 +668,14 @@ class TalentHubBot:
         record = await self._get_record_details(wallet_address)
         if not record:
             await interaction.followup.send(
-                "❌ Could not retrieve record details.",
-                ephemeral=True
+                "Could not retrieve record details.",
+                ephemeral=False
             )
             return
         
         # Create confirmation embed
         embed = discord.Embed(
-            title="⚠️ Confirm Deletion",
+            title="Confirm Deletion",
             description=f"You are about to delete the record for:\n**{record.get('Name', 'Unknown')}**",
             color=discord.Color.red()
         )
@@ -412,13 +686,14 @@ class TalentHubBot:
         
         # Create confirmation view
         class ConfirmView(View):
-            def __init__(self, bot_instance, wallet):
+            def __init__(self, bot_instance, wallet, is_slash=True):
                 super().__init__(timeout=60)
                 self.bot_instance = bot_instance
                 self.wallet = wallet
+                self.is_slash = is_slash
                 self.confirmed = False
             
-            @discord.ui.button(label="✅ Confirm Delete", style=discord.ButtonStyle.danger)
+            @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger)
             async def confirm_delete(self, interaction: discord.Interaction, button: Button):
                 self.confirmed = True
                 
@@ -427,18 +702,23 @@ class TalentHubBot:
                 
                 if success:
                     embed = discord.Embed(
-                        title="✅ Record Deleted Successfully",
+                        title="Record Deleted Successfully",
                         description=f"Record for wallet `{self.wallet}` has been deleted.",
                         color=discord.Color.red()
                     )
-                    await interaction.response.edit_message(embed=embed, view=None)
+                    
+                    if self.is_slash:
+                        await interaction.response.edit_message(embed=embed, view=None)
+                    else:
+                        await interaction.message.edit(embed=embed, view=None)
+                        await interaction.response.send_message("Record deleted!", ephemeral=True)
                     
                     # Notify submission channel
                     try:
                         channel = self.bot_instance.bot.get_channel(self.bot_instance.submission_channel_id)
                         if channel:
                             admin_embed = discord.Embed(
-                                title="🗑️ Record Deleted",
+                                title="Record Deleted",
                                 description=f"Record deleted by {interaction.user.mention}",
                                 color=discord.Color.red()
                             )
@@ -448,25 +728,129 @@ class TalentHubBot:
                     except Exception as e:
                         print(f"Error notifying channel: {e}")
                 else:
-                    await interaction.response.edit_message(
-                        content="❌ Failed to delete the record.",
-                        embed=None,
-                        view=None
-                    )
+                    if self.is_slash:
+                        await interaction.response.edit_message(
+                            content="Failed to delete the record.",
+                            embed=None,
+                            view=None
+                        )
+                    else:
+                        await interaction.message.edit(
+                            content="Failed to delete the record.",
+                            embed=None,
+                            view=None
+                        )
+                        await interaction.response.send_message("Failed to delete record.", ephemeral=True)
                 
                 self.stop()
             
-            @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
+            @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
             async def cancel(self, interaction: discord.Interaction, button: Button):
-                await interaction.response.edit_message(
-                    content="❌ Deletion cancelled.",
+                if self.is_slash:
+                    await interaction.response.edit_message(
+                        content="Deletion cancelled.",
+                        embed=None,
+                        view=None
+                    )
+                else:
+                    await interaction.message.edit(
+                        content="Deletion cancelled.",
+                        embed=None,
+                        view=None
+                    )
+                    await interaction.response.send_message("Deletion cancelled.", ephemeral=True)
+                self.stop()
+        
+        view = ConfirmView(self, wallet_address, is_slash=True)
+        await interaction.followup.send(embed=embed, view=view)
+    
+    async def remove_prefix_command(self, ctx: commands.Context, wallet_address: str):
+        """Remove a record by wallet address (prefix command)"""
+        # Check if record exists
+        row = await self._find_submission_row(wallet_address)
+        if not row:
+            await ctx.send(f"No record found for wallet address: `{wallet_address}`")
+            return
+        
+        # Get record details for confirmation
+        record = await self._get_record_details(wallet_address)
+        if not record:
+            await ctx.send("Could not retrieve record details.")
+            return
+        
+        # Create confirmation embed
+        embed = discord.Embed(
+            title="Confirm Deletion",
+            description=f"You are about to delete the record for:\n**{record.get('Name', 'Unknown')}**",
+            color=discord.Color.red()
+        )
+        embed.add_field(name="Wallet Address", value=f"`{wallet_address}`", inline=False)
+        embed.add_field(name="Role", value=record.get('Role', 'N/A'), inline=True)
+        embed.add_field(name="Status", value=record.get('Status', 'N/A'), inline=True)
+        embed.set_footer(text="This action cannot be undone!")
+        
+        # Create confirmation view
+        class ConfirmView(View):
+            def __init__(self, bot_instance, wallet, is_slash=False):
+                super().__init__(timeout=60)
+                self.bot_instance = bot_instance
+                self.wallet = wallet
+                self.is_slash = is_slash
+                self.confirmed = False
+            
+            @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger)
+            async def confirm_delete(self, interaction: discord.Interaction, button: Button):
+                self.confirmed = True
+                
+                # Delete the record
+                success = await self.bot_instance._delete_record(self.wallet)
+                
+                if success:
+                    embed = discord.Embed(
+                        title="Record Deleted Successfully",
+                        description=f"Record for wallet `{self.wallet}` has been deleted.",
+                        color=discord.Color.red()
+                    )
+                    
+                    await interaction.message.edit(embed=embed, view=None)
+                    await interaction.response.send_message("Record deleted!", ephemeral=True)
+                    
+                    # Notify submission channel
+                    try:
+                        channel = self.bot_instance.bot.get_channel(self.bot_instance.submission_channel_id)
+                        if channel:
+                            admin_embed = discord.Embed(
+                                title="Record Deleted",
+                                description=f"Record deleted by {interaction.user.mention}",
+                                color=discord.Color.red()
+                            )
+                            admin_embed.add_field(name="Wallet Address", value=f"`{self.wallet}`", inline=False)
+                            admin_embed.add_field(name="Name", value=record.get('Name', 'Unknown'), inline=True)
+                            await channel.send(embed=admin_embed)
+                    except Exception as e:
+                        print(f"Error notifying channel: {e}")
+                else:
+                    await interaction.message.edit(
+                        content="Failed to delete the record.",
+                        embed=None,
+                        view=None
+                    )
+                    await interaction.response.send_message("Failed to delete record.", ephemeral=True)
+                
+                self.stop()
+            
+            @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+            async def cancel(self, interaction: discord.Interaction, button: Button):
+                await interaction.message.edit(
+                    content="Deletion cancelled.",
                     embed=None,
                     view=None
                 )
+                await interaction.response.send_message("Deletion cancelled.", ephemeral=True)
                 self.stop()
         
-        view = ConfirmView(self, wallet_address)
-        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        view = ConfirmView(self, wallet_address, is_slash=False)
+        confirm_msg = await ctx.send(embed=embed, view=view)
     
     async def _update_excel_status(self, wallet_address: str, new_status: str) -> bool:
         try:
@@ -627,12 +1011,12 @@ class TalentHubBot:
             return False
     
     async def on_ready(self):
-        print(f'✅ Bot logged in as {self.bot.user}')
+        print(f'Bot logged in as {self.bot.user}')
         try:
             synced = await self.bot.tree.sync()
-            print(f"✅ Synced {len(synced)} command(s)")
+            print(f"Synced {len(synced)} command(s)")
         except Exception as e:
-            print(f"❌ Error syncing commands: {e}")
+            print(f"Error syncing commands: {e}")
     
     async def on_interaction(self, interaction: discord.Interaction):
         if interaction.type != discord.InteractionType.component:
@@ -659,7 +1043,7 @@ class TalentHubBot:
         except Exception as e:
             print(f"Error handling interaction: {e}")
             await interaction.response.send_message(
-                "⚠️ An error occurred while processing your request!",
+                "An error occurred while processing your request!",
                 ephemeral=True
             )
     
@@ -668,7 +1052,7 @@ class TalentHubBot:
         
         if not submission:
             await interaction.response.send_message(
-                "❌ Submission not found or already processed!",
+                "Submission not found or already processed!",
                 ephemeral=True
             )
             return
@@ -680,12 +1064,12 @@ class TalentHubBot:
             
             if success:
                 await interaction.response.send_message(
-                    "✅ Submission approved and Database updated!",
+                    "Submission approved and Database updated!",
                     ephemeral=True
                 )
             else:
                 await interaction.response.send_message(
-                    "⚠️ Approved but failed to update Database!",
+                    "Approved but failed to update Database!",
                     ephemeral=True
                 )
                 
@@ -696,12 +1080,12 @@ class TalentHubBot:
             
             if success:
                 await interaction.response.send_message(
-                    "❌ Submission rejected and Database updated!",
+                    "Submission rejected and Database updated!",
                     ephemeral=True
                 )
             else:
                 await interaction.response.send_message(
-                    "⚠️ Rejected but failed to update Database!",
+                    "Rejected but failed to update Database!",
                     ephemeral=True
                 )
                 
@@ -714,7 +1098,7 @@ class TalentHubBot:
         
         if not update_data:
             await interaction.response.send_message(
-                "❌ Update not found or already processed!",
+                "Update not found or already processed!",
                 ephemeral=True
             )
             return
@@ -725,12 +1109,12 @@ class TalentHubBot:
             
             if success:
                 await interaction.response.send_message(
-                    "✅ Update approved and Database updated!",
+                    "Update approved and Database updated!",
                     ephemeral=True
                 )
             else:
                 await interaction.response.send_message(
-                    "⚠️ Approved but failed to update Database!",
+                    "Approved but failed to update Database!",
                     ephemeral=True
                 )
                 
@@ -738,7 +1122,7 @@ class TalentHubBot:
             await self._update_excel_record(wallet, {}, "Rejected")
             await self._update_update_message(interaction, update_data, "Rejected")
             await interaction.response.send_message(
-                "❌ Update rejected - Status updated in Database",
+                "Update rejected - Status updated in Database",
                 ephemeral=True
             )
                 
@@ -777,7 +1161,7 @@ class TalentHubBot:
         color = color_map.get(status, 0xffff00)
         
         embed = discord.Embed(
-            title=f"🎯 {submission_data.get('name', 'N/A')} - {status}",
+            title=f"{submission_data.get('name', 'N/A')} - {status}",
             description=f"**{submission_data.get('role', 'N/A')}** | {submission_data.get('injectiveRole', 'N/A')}",
             color=color
         )
@@ -789,23 +1173,23 @@ class TalentHubBot:
             f"**Experience:** {submission_data.get('experience', 'N/A')}",
             f"**Education:** {submission_data.get('education', 'N/A')}",
             f"**Location:** {submission_data.get('location', 'N/A')}",
-            f"**Availability:** {'✅' if submission_data.get('available') else '❌'}",
+            f"**Availability:** {'Yes' if submission_data.get('available') else 'No'}",
             f"**Rate:** {submission_data.get('monthlyRate', 'N/A')}",
             f"**Wallet:** `{data.get('wallet', 'N/A')[:6]}...{data.get('wallet', 'N/A')[-4:]}`"
         ]
-        embed.add_field(name="ℹ️ Basic Info", value="\n".join(basic_info), inline=False)
+        embed.add_field(name="Basic Info", value="\n".join(basic_info), inline=False)
         
         blockchain_info = [
             f"**NFTs:** {submission_data.get('nftHold', 'N/A')}",
             f"**Tokens:** {submission_data.get('tokenHold', 'N/A')}",
             f"**Wallet Type:** {submission_data.get('walletType', 'N/A')}"
         ]
-        embed.add_field(name="🔗 Blockchain Info", value="\n".join(blockchain_info), inline=False)
+        embed.add_field(name="Blockchain Info", value="\n".join(blockchain_info), inline=False)
         
         skills = "• " + "\n• ".join(submission_data.get('skills', [])) if submission_data.get('skills') else "None"
         languages = "• " + "\n• ".join(submission_data.get('languages', [])) if submission_data.get('languages') else "None"
-        embed.add_field(name="🛠️ Skills", value=skills, inline=True)
-        embed.add_field(name="🗣️ Languages", value=languages, inline=True)
+        embed.add_field(name="Skills", value=skills, inline=True)
+        embed.add_field(name="Languages", value=languages, inline=True)
         
         contact_info = [
             f"**Discord:** {submission_data.get('discord', '-')}",
@@ -815,7 +1199,7 @@ class TalentHubBot:
             f"**X:** {submission_data.get('X', 'N/A') or '-'}",
             f"**GitHub:** {submission_data.get('github', 'N/A') or '-'}"
         ]
-        embed.add_field(name="📩 Contact Info", value="\n".join(contact_info), inline=False)
+        embed.add_field(name="Contact Info", value="\n".join(contact_info), inline=False)
         
         links = []
         if submission_data.get('portfolio'):
@@ -823,11 +1207,11 @@ class TalentHubBot:
         if submission_data.get('cv'):
             links.append(f"**CV:** [Download CV]({submission_data['cv']})")
         if links:
-            embed.add_field(name="🔗 Links", value="\n".join(links), inline=False)
+            embed.add_field(name="Links", value="\n".join(links), inline=False)
         
         bio = submission_data.get('bio', 'No bio provided')
         embed.add_field(
-            name="📝 Bio", 
+            name="Bio", 
             value=f"{bio[:250]}{'...' if len(bio) > 250 else ''}", 
             inline=False
         )
@@ -850,7 +1234,7 @@ class TalentHubBot:
         color = color_map.get(status, 0xffff00)
         
         embed = discord.Embed(
-            title=f"🔄 Talent Profile Update - {status}",
+            title=f"Talent Profile Update - {status}",
             description=f"**{existing_data.get('name', 'N/A')}** | `{wallet[:6]}...{wallet[-4:]}`",
             color=color
         )
@@ -858,7 +1242,7 @@ class TalentHubBot:
         if existing_data.get('profilePicture'):
             embed.set_thumbnail(url=existing_data['profilePicture'])
         
-        current_field = {"name": "🆕 Proposed Changes", "value": "", "inline": False}
+        current_field = {"name": "Proposed Changes", "value": "", "inline": False}
         
         for field, new_value in updates.items():
             old_value = existing_data.get(field, '')
@@ -879,7 +1263,7 @@ class TalentHubBot:
             if len(current_field["value"]) + len(entry) > 1024:
                 embed.add_field(**current_field)
                 current_field = {
-                    "name": "🆕 Proposed Changes (cont.)",
+                    "name": "Proposed Changes (cont.)",
                     "value": entry,
                     "inline": False
                 }
@@ -898,9 +1282,9 @@ class TalentHubBot:
         view = View(timeout=None)  
         
         buttons = [
-            Button(label="✅ Approve", style=discord.ButtonStyle.success, custom_id=f"submission:approve:{wallet}"),
-            Button(label="❌ Reject", style=discord.ButtonStyle.danger, custom_id=f"submission:reject:{wallet}"),
-            Button(label="✏️ Request Changes", style=discord.ButtonStyle.primary, custom_id=f"submission:changes:{wallet}")
+            Button(label="Approve", style=discord.ButtonStyle.success, custom_id=f"submission:approve:{wallet}"),
+            Button(label="Reject", style=discord.ButtonStyle.danger, custom_id=f"submission:reject:{wallet}"),
+            Button(label="Request Changes", style=discord.ButtonStyle.primary, custom_id=f"submission:changes:{wallet}")
         ]
         
         for button in buttons:
@@ -912,8 +1296,8 @@ class TalentHubBot:
         view = View(timeout=None)  
         
         buttons = [
-            Button(label="✅ Approve", style=discord.ButtonStyle.success, custom_id=f"update:approve:{wallet}"),
-            Button(label="❌ Reject", style=discord.ButtonStyle.danger, custom_id=f"update:reject:{wallet}"),
+            Button(label="Approve", style=discord.ButtonStyle.success, custom_id=f"update:approve:{wallet}"),
+            Button(label="Reject", style=discord.ButtonStyle.danger, custom_id=f"update:reject:{wallet}"),
         ]
         
         for button in buttons:
@@ -925,7 +1309,7 @@ class TalentHubBot:
         try:
             channel = self.bot.get_channel(self.submission_channel_id)
             if not channel:
-                print("❌ Error: Submission channel not found!")
+                print("Error: Submission channel not found!")
                 return None
                 
             wallet = data['walletAddress']
@@ -937,7 +1321,7 @@ class TalentHubBot:
             
             excel_success = await self._save_new_submission(data)
             if not excel_success:
-                print(f"⚠️ Warning: Failed to save submission for {wallet} to Database")
+                print(f"Warning: Failed to save submission for {wallet} to Database")
                 
             self.pending_submissions[wallet] = submission
             
@@ -950,19 +1334,19 @@ class TalentHubBot:
             return message
             
         except Exception as e:
-            print(f"❌ Error posting submission: {e}")
+            print(f"Error posting submission: {e}")
             return None
     
     async def post_update_request(self, wallet_address: str, updates: dict) -> Optional[discord.Message]:
         try:
             channel = self.bot.get_channel(self.submission_channel_id)
             if not channel:
-                print("❌ Error: Submission channel not found!")
+                print("Error: Submission channel not found!")
                 return None
                 
             existing_data = await self._get_existing_record(wallet_address)
             if not existing_data:
-                print(f"❌ Error: No existing record found for wallet {wallet_address}")
+                print(f"Error: No existing record found for wallet {wallet_address}")
                 return None
                 
             update_data = {
@@ -983,7 +1367,7 @@ class TalentHubBot:
             return message
             
         except Exception as e:
-            print(f"❌ Error posting update request: {e}")
+            print(f"Error posting update request: {e}")
             return None
     
     def start(self):
@@ -991,7 +1375,7 @@ class TalentHubBot:
             try:
                 await self.bot.start(self.bot_code)
             except Exception as e:
-                print(f"❌ Bot error: {e}")
+                print(f"Bot error: {e}")
                 await self.bot.close()
         
         self.loop.run_until_complete(runner())
@@ -1069,12 +1453,12 @@ class SubmissionChangesModal(Modal, title="Edit Submission"):
         
         if success:
             await interaction.response.send_message(
-                "✅ Changes saved and submission approved! Database updated.",
+                "Changes saved and submission approved! Database updated.",
                 ephemeral=True
             )
         else:
             await interaction.response.send_message(
-                "⚠️ Changes saved and approved but failed to update Database!",
+                "Changes saved and approved but failed to update Database!",
                 ephemeral=True
             )
 
@@ -1108,7 +1492,7 @@ class UpdateChangesModal(Modal, title="Edit Update Request"):
             submitter = await interaction.guild.fetch_member(int(wallet)) 
             if submitter:
                 await submitter.send(
-                    f"ℹ️ Your talent profile update for wallet `{wallet[:6]}...{wallet[-4:]}` requires changes:\n"
+                    f"Your talent profile update for wallet `{wallet[:6]}...{wallet[-4:]}` requires changes:\n"
                     f"```{self.notes.value}```\n"
                     "Please submit a new update with the requested changes."
                 )
@@ -1117,12 +1501,12 @@ class UpdateChangesModal(Modal, title="Edit Update Request"):
         
         if success:
             await interaction.response.send_message(
-                "✏️ Changes requested and status updated in Database!",
+                "Changes requested and status updated in Database!",
                 ephemeral=True
             )
         else:
             await interaction.response.send_message(
-                "⚠️ Changes requested but failed to update Database status!",
+                "Changes requested but failed to update Database status!",
                 ephemeral=True
             )
 
