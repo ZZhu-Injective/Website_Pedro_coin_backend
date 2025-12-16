@@ -2,8 +2,6 @@ import os
 import pandas as pd
 from openpyxl import load_workbook
 
-#Checking Talent to retrieve it based on the walletaddress.
-
 class TalentDatabase:
     def __init__(self, excel_file='Atalent_submissions.xlsx'):
         self.file_path = os.path.join(excel_file)

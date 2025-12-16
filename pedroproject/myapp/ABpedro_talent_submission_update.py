@@ -26,14 +26,12 @@ class TalentHubBot:
             return
             
         self.initialized = True
-        # Fix: Add message_content intent
         intents = discord.Intents.default()
         intents.message_content = True
         
         self.bot = commands.Bot(
             command_prefix="!", 
             intents=intents,
-            # Add these to help with interaction issues
             max_messages=None
         )
         self.submission_channel_id = 1374018261578027129
@@ -47,14 +45,12 @@ class TalentHubBot:
         self.bot.event(self.on_ready)
         self.bot.event(self.on_interaction)
         
-        # Register slash commands
         self.bot.tree.command(name="show")(self.show_command)
         self.bot.tree.command(name="show_simple")(self.show_simple_command)
         self.bot.tree.command(name="change")(self.change_command)
         self.bot.tree.command(name="remove")(self.remove_command)
         self.bot.tree.command(name="column_names")(self.column_names_command)
         
-        # Register prefix commands
         @self.bot.command(name="show")
         async def show_prefix(ctx):
             await self.show_prefix_command(ctx)
@@ -90,12 +86,10 @@ class TalentHubBot:
                     "Portfolio", "CV", "Image url", "Bio", "Submission date", "Status"
                 ]
                 if [cell.value for cell in ws[1]] != expected_headers:
-                    # Just recreate without backup
                     os.remove(self.excel_file)
                     self._init_excel_file()
             except Exception as e:
                 print(f"Error verifying Excel file: {e}")
-                # Just recreate without backup
                 if os.path.exists(self.excel_file):
                     os.remove(self.excel_file)
                 self._init_excel_file()
@@ -159,7 +153,6 @@ class TalentHubBot:
             
             records = []
             for row in range(2, ws.max_row + 1):
-                # Get key fields
                 name = ws[f'A{row}'].value
                 wallet = ws[f'Q{row}'].value
                 
@@ -209,7 +202,6 @@ class TalentHubBot:
                 wb.close()
                 return False
             
-            # Delete the row
             ws.delete_rows(row)
             wb.save(self.excel_file)
             wb.close()
@@ -222,7 +214,6 @@ class TalentHubBot:
     async def _update_single_field(self, wallet_address: str, column_name: str, new_value: str) -> bool:
         """Update a single field in a record"""
         try:
-            # Column mapping
             column_map = {
                 'Name': 'A',
                 'Role': 'B',
@@ -261,11 +252,9 @@ class TalentHubBot:
                 wb.close()
                 return False
             
-            # Update the cell
             col = column_map[column_name]
             ws[f'{col}{row}'] = new_value
             
-            # Update submission date
             ws[f'Y{row}'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             
             wb.save(self.excel_file)
@@ -312,7 +301,6 @@ class TalentHubBot:
     
     async def column_names_command(self, interaction: discord.Interaction):
         """Show all available column names (slash command)"""
-        # CRITICAL FIX: Defer IMMEDIATELY at the start
         await interaction.response.defer(ephemeral=True)
         
         try:
@@ -324,14 +312,12 @@ class TalentHubBot:
                 'CV', 'Image url', 'Bio', 'Status'
             ]
             
-            # Create embed
             embed = discord.Embed(
                 title="Available Column Names",
                 description="These are the columns you can modify using the /change command:",
                 color=discord.Color.blue()
             )
             
-            # Add columns in organized groups
             embed.add_field(
                 name="Basic Information",
                 value="• Name\n• Role\n• Injective Role\n• Experience\n• Education\n• Location\n• Availability\n• Monthly Rate",
@@ -370,7 +356,6 @@ class TalentHubBot:
             
             embed.set_footer(text="Use /change <wallet> <column> <value> to modify these fields")
             
-            # Send the embed publicly
             await interaction.followup.send(embed=embed)
             
         except Exception as e:
@@ -392,14 +377,12 @@ class TalentHubBot:
                 'CV', 'Image url', 'Bio', 'Status'
             ]
             
-            # Create embed
             embed = discord.Embed(
                 title="Available Column Names",
                 description="These are the columns you can modify using the !change command:",
                 color=discord.Color.blue()
             )
             
-            # Add columns in organized groups
             embed.add_field(
                 name="Basic Information",
                 value="• Name\n• Role\n• Injective Role\n• Experience\n• Education\n• Location\n• Availability\n• Monthly Rate",
@@ -438,7 +421,6 @@ class TalentHubBot:
             
             embed.set_footer(text="Use !change <wallet> <column> <value> to modify these fields")
             
-            # Send the embed
             await ctx.send(embed=embed)
             
         except Exception as e:
@@ -447,7 +429,6 @@ class TalentHubBot:
     
     async def show_command(self, interaction: discord.Interaction):
         """Show all records in the database with pagination (slash command)"""
-        # CRITICAL FIX: Defer IMMEDIATELY at the start
         await interaction.response.defer()
         
         try:
@@ -457,7 +438,6 @@ class TalentHubBot:
                 await interaction.followup.send("No records found in the database.")
                 return
             
-            # Create paginated view
             class PaginatedView(View):
                 def __init__(self, records: List[Tuple[str, str]], page: int = 0):
                     super().__init__(timeout=180)
@@ -468,18 +448,15 @@ class TalentHubBot:
                 
                 def create_embed(self):
                     """Create embed for current page"""
-                    # Calculate start and end indices
                     start_idx = self.page * self.records_per_page
                     end_idx = min(start_idx + self.records_per_page, len(self.records))
                     
-                    # Create embed
                     embed = discord.Embed(
                         title="Talent Database",
                         description=f"Showing records {start_idx + 1}-{end_idx} of {len(self.records)}",
                         color=discord.Color.blue()
                     )
                     
-                    # Add records for current page
                     for i in range(start_idx, end_idx):
                         name, wallet = self.records[i]
                         embed.add_field(
@@ -501,7 +478,6 @@ class TalentHubBot:
                 
                 @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.primary, custom_id="prev", disabled=True)
                 async def previous_button(self, interaction: discord.Interaction, button: Button):
-                    # Defer the response for button interactions too
                     await interaction.response.defer()
                     if self.page > 0:
                         self.page -= 1
@@ -511,7 +487,6 @@ class TalentHubBot:
                 
                 @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.primary, custom_id="next")
                 async def next_button(self, interaction: discord.Interaction, button: Button):
-                    # Defer the response for button interactions too
                     await interaction.response.defer()
                     if self.page < self.total_pages - 1:
                         self.page += 1
@@ -525,14 +500,11 @@ class TalentHubBot:
                     await interaction.edit_original_response(content="View closed.", embed=None, view=None)
                     self.stop()
             
-            # Create initial view
             view = PaginatedView(records)
             
-            # Create initial embed
             embed = view.create_embed()
             await view.update_buttons()
             
-            # Send the initial message
             await interaction.followup.send(embed=embed, view=view)
             
         except Exception as e:
@@ -545,7 +517,6 @@ class TalentHubBot:
     
     async def show_simple_command(self, interaction: discord.Interaction):
         """Show simple list of names and wallets (slash command)"""
-        # CRITICAL FIX: Defer IMMEDIATELY at the start
         await interaction.response.defer()
         
         try:
@@ -555,29 +526,25 @@ class TalentHubBot:
                 await interaction.followup.send("No records found in the database.")
                 return
             
-            # Create paginated view for simple view
             class SimplePaginatedView(View):
                 def __init__(self, records: List[Tuple[str, str]], page: int = 0):
                     super().__init__(timeout=180)
                     self.records = records
                     self.page = page
-                    self.records_per_page = 15  # More records per page for simple view
+                    self.records_per_page = 15  
                     self.total_pages = (len(records) + self.records_per_page - 1) // self.records_per_page
                 
                 def create_embed(self):
                     """Create embed for current page"""
-                    # Calculate start and end indices
                     start_idx = self.page * self.records_per_page
                     end_idx = min(start_idx + self.records_per_page, len(self.records))
                     
-                    # Create embed
                     embed = discord.Embed(
                         title="Talent Database - Simple View",
                         description=f"Showing records {start_idx + 1}-{end_idx} of {len(self.records)}",
                         color=discord.Color.green()
                     )
                     
-                    # Add records for current page (in columns)
                     page_records = self.records[start_idx:end_idx]
                     for name, wallet in page_records:
                         embed.add_field(
@@ -621,14 +588,11 @@ class TalentHubBot:
                     await interaction.edit_original_response(content="View closed.", embed=None, view=None)
                     self.stop()
             
-            # Create initial view
             view = SimplePaginatedView(records)
             
-            # Create initial embed
             embed = view.create_embed()
             await view.update_buttons()
             
-            # Send the initial message
             await interaction.followup.send(embed=embed, view=view)
             
         except Exception as e:
@@ -648,7 +612,6 @@ class TalentHubBot:
                 await ctx.send("No records found in the database.")
                 return
             
-            # Create paginated view for prefix command
             class PaginatedView(View):
                 def __init__(self, records: List[Tuple[str, str]], page: int = 0):
                     super().__init__(timeout=180)
@@ -659,18 +622,15 @@ class TalentHubBot:
                 
                 def create_embed(self):
                     """Create embed for current page"""
-                    # Calculate start and end indices
                     start_idx = self.page * self.records_per_page
                     end_idx = min(start_idx + self.records_per_page, len(self.records))
                     
-                    # Create embed
                     embed = discord.Embed(
                         title="Talent Database",
                         description=f"Showing records {start_idx + 1}-{end_idx} of {len(self.records)}",
                         color=discord.Color.blue()
                     )
                     
-                    # Add records for current page
                     for i in range(start_idx, end_idx):
                         name, wallet = self.records[i]
                         embed.add_field(
@@ -714,7 +674,6 @@ class TalentHubBot:
                     await interaction.edit_original_response(content="View closed.", embed=None, view=None)
                     self.stop()
             
-            # Create and send initial view
             view = PaginatedView(records)
             embed = view.create_embed()
             await view.update_buttons()
@@ -735,7 +694,6 @@ class TalentHubBot:
                 await ctx.send("No records found in the database.")
                 return
             
-            # Create paginated view for simple prefix command
             class SimplePaginatedView(View):
                 def __init__(self, records: List[Tuple[str, str]], page: int = 0):
                     super().__init__(timeout=180)
@@ -746,18 +704,15 @@ class TalentHubBot:
                 
                 def create_embed(self):
                     """Create embed for current page"""
-                    # Calculate start and end indices
                     start_idx = self.page * self.records_per_page
                     end_idx = min(start_idx + self.records_per_page, len(self.records))
                     
-                    # Create embed
                     embed = discord.Embed(
                         title="Talent Database - Simple View",
                         description=f"Showing records {start_idx + 1}-{end_idx} of {len(self.records)}",
                         color=discord.Color.green()
                     )
                     
-                    # Add records for current page (in columns)
                     page_records = self.records[start_idx:end_idx]
                     for name, wallet in page_records:
                         embed.add_field(
@@ -801,7 +756,6 @@ class TalentHubBot:
                     await interaction.edit_original_response(content="View closed.", embed=None, view=None)
                     self.stop()
             
-            # Create and send initial view
             view = SimplePaginatedView(records)
             embed = view.create_embed()
             await view.update_buttons()
@@ -815,7 +769,6 @@ class TalentHubBot:
     
     async def change_command(self, interaction: discord.Interaction, wallet_address: str, column_name: str, new_value: str):
         """Change a specific field for a wallet address (slash command)"""
-        # CRITICAL FIX: Defer IMMEDIATELY at the start
         await interaction.response.defer()
         
         valid_columns = [
@@ -832,7 +785,6 @@ class TalentHubBot:
             )
             return
         
-        # Check if record exists
         row = await self._find_submission_row(wallet_address)
         if not row:
             await interaction.followup.send(
@@ -840,7 +792,6 @@ class TalentHubBot:
             )
             return
         
-        # Get old value for logging
         record = await self._get_record_details(wallet_address)
         if not record:
             await interaction.followup.send(
@@ -850,7 +801,6 @@ class TalentHubBot:
         
         old_value = record.get(column_name, "N/A")
         
-        # Update the field
         success = await self._update_single_field(wallet_address, column_name, new_value)
         
         if success:
@@ -866,7 +816,6 @@ class TalentHubBot:
             
             await interaction.followup.send(embed=embed)
             
-            # Also send to submission channel
             try:
                 channel = self.bot.get_channel(self.submission_channel_id)
                 if channel:
@@ -903,13 +852,11 @@ class TalentHubBot:
             )
             return
         
-        # Check if record exists
         row = await self._find_submission_row(wallet_address)
         if not row:
             await ctx.send(f"No record found for wallet address: `{wallet_address}`")
             return
         
-        # Get old value for logging
         record = await self._get_record_details(wallet_address)
         if not record:
             await ctx.send("Could not retrieve record details.")
@@ -917,10 +864,8 @@ class TalentHubBot:
         
         old_value = record.get(column_name, "N/A")
         
-        # Send processing message
         processing_msg = await ctx.send("Updating field...")
         
-        # Update the field
         success = await self._update_single_field(wallet_address, column_name, new_value)
         
         if success:
@@ -937,7 +882,6 @@ class TalentHubBot:
             await processing_msg.delete()
             await ctx.send(embed=embed)
             
-            # Also send to submission channel
             try:
                 channel = self.bot.get_channel(self.submission_channel_id)
                 if channel:
@@ -958,10 +902,8 @@ class TalentHubBot:
     
     async def remove_command(self, interaction: discord.Interaction, wallet_address: str):
         """Remove a record by wallet address (slash command)"""
-        # CRITICAL FIX: Defer IMMEDIATELY at the start
         await interaction.response.defer()
         
-        # Check if record exists
         row = await self._find_submission_row(wallet_address)
         if not row:
             await interaction.followup.send(
@@ -969,7 +911,6 @@ class TalentHubBot:
             )
             return
         
-        # Get record details for confirmation
         record = await self._get_record_details(wallet_address)
         if not record:
             await interaction.followup.send(
@@ -977,7 +918,6 @@ class TalentHubBot:
             )
             return
         
-        # Create confirmation embed
         embed = discord.Embed(
             title="Confirm Deletion",
             description=f"You are about to delete the record for:\n**{record.get('Name', 'Unknown')}**",
