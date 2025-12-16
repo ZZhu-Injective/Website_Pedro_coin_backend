@@ -8,6 +8,7 @@ from openpyxl import Workbook, load_workbook
 from datetime import datetime
 from typing import Dict, Optional, List, Tuple
 from dotenv import load_dotenv
+import traceback
 
 load_dotenv()
 
@@ -25,7 +26,16 @@ class TalentHubBot:
             return
             
         self.initialized = True
-        self.bot = commands.Bot(command_prefix="!", intents=discord.Intents.default())
+        # Fix: Add message_content intent
+        intents = discord.Intents.default()
+        intents.message_content = True
+        
+        self.bot = commands.Bot(
+            command_prefix="!", 
+            intents=intents,
+            # Add these to help with interaction issues
+            max_messages=None
+        )
         self.submission_channel_id = 1374018261578027129
         self.pending_submissions: Dict[str, dict] = {}
         self.pending_updates: Dict[str, dict] = {}
@@ -302,8 +312,8 @@ class TalentHubBot:
     
     async def column_names_command(self, interaction: discord.Interaction):
         """Show all available column names (slash command)"""
-        # Use defer to avoid timeout
-        await interaction.response.defer()
+        # CRITICAL FIX: Defer IMMEDIATELY at the start
+        await interaction.response.defer(ephemeral=True)
         
         try:
             valid_columns = [
@@ -365,6 +375,7 @@ class TalentHubBot:
             
         except Exception as e:
             print(f"Error in column_names command: {e}")
+            traceback.print_exc()
             await interaction.followup.send(
                 "An error occurred while fetching column names.",
                 ephemeral=True
@@ -436,6 +447,7 @@ class TalentHubBot:
     
     async def show_command(self, interaction: discord.Interaction):
         """Show all records in the database with pagination (slash command)"""
+        # CRITICAL FIX: Defer IMMEDIATELY at the start
         await interaction.response.defer()
         
         try:
@@ -454,7 +466,8 @@ class TalentHubBot:
                     self.records_per_page = 5
                     self.total_pages = (len(records) + self.records_per_page - 1) // self.records_per_page
                 
-                async def update_message(self, interaction: discord.Interaction):
+                def create_embed(self):
+                    """Create embed for current page"""
                     # Calculate start and end indices
                     start_idx = self.page * self.records_per_page
                     end_idx = min(start_idx + self.records_per_page, len(self.records))
@@ -476,39 +489,55 @@ class TalentHubBot:
                         )
                     
                     embed.set_footer(text=f"Page {self.page + 1}/{self.total_pages} | Use buttons to navigate")
-                    
-                    # Update button states
+                    return embed
+                
+                async def update_buttons(self):
+                    """Update button states"""
                     for child in self.children:
                         if child.custom_id == "prev":
                             child.disabled = self.page == 0
                         elif child.custom_id == "next":
                             child.disabled = self.page == self.total_pages - 1
-                    
-                    await interaction.response.edit_message(embed=embed, view=self)
                 
                 @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.primary, custom_id="prev", disabled=True)
                 async def previous_button(self, interaction: discord.Interaction, button: Button):
+                    # Defer the response for button interactions too
+                    await interaction.response.defer()
                     if self.page > 0:
                         self.page -= 1
-                        await self.update_message(interaction)
+                        embed = self.create_embed()
+                        await self.update_buttons()
+                        await interaction.edit_original_response(embed=embed, view=self)
                 
                 @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.primary, custom_id="next")
                 async def next_button(self, interaction: discord.Interaction, button: Button):
+                    # Defer the response for button interactions too
+                    await interaction.response.defer()
                     if self.page < self.total_pages - 1:
                         self.page += 1
-                        await self.update_message(interaction)
+                        embed = self.create_embed()
+                        await self.update_buttons()
+                        await interaction.edit_original_response(embed=embed, view=self)
                 
                 @discord.ui.button(label="❌ Close", style=discord.ButtonStyle.danger)
                 async def close_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.edit_message(content="View closed.", embed=None, view=None)
+                    await interaction.response.defer()
+                    await interaction.edit_original_response(content="View closed.", embed=None, view=None)
                     self.stop()
             
             # Create initial view
             view = PaginatedView(records)
-            await view.update_message(interaction)
+            
+            # Create initial embed
+            embed = view.create_embed()
+            await view.update_buttons()
+            
+            # Send the initial message
+            await interaction.followup.send(embed=embed, view=view)
             
         except Exception as e:
             print(f"Error in show command: {e}")
+            traceback.print_exc()
             await interaction.followup.send(
                 "An error occurred while fetching records.",
                 ephemeral=True
@@ -516,6 +545,7 @@ class TalentHubBot:
     
     async def show_simple_command(self, interaction: discord.Interaction):
         """Show simple list of names and wallets (slash command)"""
+        # CRITICAL FIX: Defer IMMEDIATELY at the start
         await interaction.response.defer()
         
         try:
@@ -534,7 +564,8 @@ class TalentHubBot:
                     self.records_per_page = 15  # More records per page for simple view
                     self.total_pages = (len(records) + self.records_per_page - 1) // self.records_per_page
                 
-                async def update_message(self, interaction: discord.Interaction):
+                def create_embed(self):
+                    """Create embed for current page"""
                     # Calculate start and end indices
                     start_idx = self.page * self.records_per_page
                     end_idx = min(start_idx + self.records_per_page, len(self.records))
@@ -556,39 +587,53 @@ class TalentHubBot:
                         )
                     
                     embed.set_footer(text=f"Page {self.page + 1}/{self.total_pages} | Use buttons to navigate")
-                    
-                    # Update button states
+                    return embed
+                
+                async def update_buttons(self):
+                    """Update button states"""
                     for child in self.children:
                         if child.custom_id == "prev_simple":
                             child.disabled = self.page == 0
                         elif child.custom_id == "next_simple":
                             child.disabled = self.page == self.total_pages - 1
-                    
-                    await interaction.response.edit_message(embed=embed, view=self)
                 
                 @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.primary, custom_id="prev_simple", disabled=True)
                 async def previous_button(self, interaction: discord.Interaction, button: Button):
+                    await interaction.response.defer()
                     if self.page > 0:
                         self.page -= 1
-                        await self.update_message(interaction)
+                        embed = self.create_embed()
+                        await self.update_buttons()
+                        await interaction.edit_original_response(embed=embed, view=self)
                 
                 @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.primary, custom_id="next_simple")
                 async def next_button(self, interaction: discord.Interaction, button: Button):
+                    await interaction.response.defer()
                     if self.page < self.total_pages - 1:
                         self.page += 1
-                        await self.update_message(interaction)
+                        embed = self.create_embed()
+                        await self.update_buttons()
+                        await interaction.edit_original_response(embed=embed, view=self)
                 
                 @discord.ui.button(label="❌ Close", style=discord.ButtonStyle.danger)
                 async def close_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.edit_message(content="View closed.", embed=None, view=None)
+                    await interaction.response.defer()
+                    await interaction.edit_original_response(content="View closed.", embed=None, view=None)
                     self.stop()
             
             # Create initial view
             view = SimplePaginatedView(records)
-            await view.update_message(interaction)
+            
+            # Create initial embed
+            embed = view.create_embed()
+            await view.update_buttons()
+            
+            # Send the initial message
+            await interaction.followup.send(embed=embed, view=view)
             
         except Exception as e:
             print(f"Error in show_simple command: {e}")
+            traceback.print_exc()
             await interaction.followup.send(
                 "An error occurred while fetching records.",
                 ephemeral=True
@@ -611,10 +656,9 @@ class TalentHubBot:
                     self.page = page
                     self.records_per_page = 5
                     self.total_pages = (len(records) + self.records_per_page - 1) // self.records_per_page
-                    self.original_ctx = ctx
-                    self.message = None
                 
-                async def send_initial(self):
+                def create_embed(self):
+                    """Create embed for current page"""
                     # Calculate start and end indices
                     start_idx = self.page * self.records_per_page
                     end_idx = min(start_idx + self.records_per_page, len(self.records))
@@ -636,71 +680,50 @@ class TalentHubBot:
                         )
                     
                     embed.set_footer(text=f"Page {self.page + 1}/{self.total_pages} | Use buttons to navigate")
-                    
-                    # Update button states
-                    for child in self.children:
-                        if child.custom_id == "prev_prefix":
-                            child.disabled = self.page == 0
-                        elif child.custom_id == "next_prefix":
-                            child.disabled = self.page == self.total_pages - 1
-                    
-                    self.message = await self.original_ctx.send(embed=embed, view=self)
+                    return embed
                 
-                async def update_message(self, interaction: discord.Interaction):
-                    # Calculate start and end indices
-                    start_idx = self.page * self.records_per_page
-                    end_idx = min(start_idx + self.records_per_page, len(self.records))
-                    
-                    # Create embed
-                    embed = discord.Embed(
-                        title="Talent Database",
-                        description=f"Showing records {start_idx + 1}-{end_idx} of {len(self.records)}",
-                        color=discord.Color.blue()
-                    )
-                    
-                    # Add records for current page
-                    for i in range(start_idx, end_idx):
-                        name, wallet = self.records[i]
-                        embed.add_field(
-                            name=f"{name}",
-                            value=f"`{wallet}`",
-                            inline=False
-                        )
-                    
-                    embed.set_footer(text=f"Page {self.page + 1}/{self.total_pages} | Use buttons to navigate")
-                    
-                    # Update button states
+                async def update_buttons(self):
+                    """Update button states"""
                     for child in self.children:
                         if child.custom_id == "prev_prefix":
                             child.disabled = self.page == 0
                         elif child.custom_id == "next_prefix":
                             child.disabled = self.page == self.total_pages - 1
-                    
-                    await interaction.response.edit_message(embed=embed, view=self)
                 
                 @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.primary, custom_id="prev_prefix", disabled=True)
                 async def previous_button(self, interaction: discord.Interaction, button: Button):
+                    await interaction.response.defer()
                     if self.page > 0:
                         self.page -= 1
-                        await self.update_message(interaction)
+                        embed = self.create_embed()
+                        await self.update_buttons()
+                        await interaction.edit_original_response(embed=embed, view=self)
                 
                 @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.primary, custom_id="next_prefix")
                 async def next_button(self, interaction: discord.Interaction, button: Button):
+                    await interaction.response.defer()
                     if self.page < self.total_pages - 1:
                         self.page += 1
-                        await self.update_message(interaction)
+                        embed = self.create_embed()
+                        await self.update_buttons()
+                        await interaction.edit_original_response(embed=embed, view=self)
                 
                 @discord.ui.button(label="❌ Close", style=discord.ButtonStyle.danger)
                 async def close_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.edit_message(content="View closed.", embed=None, view=None)
+                    await interaction.response.defer()
+                    await interaction.edit_original_response(content="View closed.", embed=None, view=None)
                     self.stop()
             
             # Create and send initial view
             view = PaginatedView(records)
-            await view.send_initial()
+            embed = view.create_embed()
+            await view.update_buttons()
+            
+            await ctx.send(embed=embed, view=view)
             
         except Exception as e:
             print(f"Error in show prefix command: {e}")
+            traceback.print_exc()
             await ctx.send("An error occurred while fetching records.")
     
     async def show_simple_prefix_command(self, ctx: commands.Context):
@@ -720,10 +743,9 @@ class TalentHubBot:
                     self.page = page
                     self.records_per_page = 15
                     self.total_pages = (len(records) + self.records_per_page - 1) // self.records_per_page
-                    self.original_ctx = ctx
-                    self.message = None
                 
-                async def send_initial(self):
+                def create_embed(self):
+                    """Create embed for current page"""
                     # Calculate start and end indices
                     start_idx = self.page * self.records_per_page
                     end_idx = min(start_idx + self.records_per_page, len(self.records))
@@ -745,75 +767,55 @@ class TalentHubBot:
                         )
                     
                     embed.set_footer(text=f"Page {self.page + 1}/{self.total_pages} | Use buttons to navigate")
-                    
-                    # Update button states
-                    for child in self.children:
-                        if child.custom_id == "prev_simple_prefix":
-                            child.disabled = self.page == 0
-                        elif child.custom_id == "next_simple_prefix":
-                            child.disabled = self.page == self.total_pages - 1
-                    
-                    self.message = await self.original_ctx.send(embed=embed, view=self)
+                    return embed
                 
-                async def update_message(self, interaction: discord.Interaction):
-                    # Calculate start and end indices
-                    start_idx = self.page * self.records_per_page
-                    end_idx = min(start_idx + self.records_per_page, len(self.records))
-                    
-                    # Create embed
-                    embed = discord.Embed(
-                        title="Talent Database - Simple View",
-                        description=f"Showing records {start_idx + 1}-{end_idx} of {len(self.records)}",
-                        color=discord.Color.green()
-                    )
-                    
-                    # Add records for current page (in columns)
-                    page_records = self.records[start_idx:end_idx]
-                    for name, wallet in page_records:
-                        embed.add_field(
-                            name=f"{name}",
-                            value=f"`{wallet}`",
-                            inline=True
-                        )
-                    
-                    embed.set_footer(text=f"Page {self.page + 1}/{self.total_pages} | Use buttons to navigate")
-                    
-                    # Update button states
+                async def update_buttons(self):
+                    """Update button states"""
                     for child in self.children:
                         if child.custom_id == "prev_simple_prefix":
                             child.disabled = self.page == 0
                         elif child.custom_id == "next_simple_prefix":
                             child.disabled = self.page == self.total_pages - 1
-                    
-                    await interaction.response.edit_message(embed=embed, view=self)
                 
                 @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.primary, custom_id="prev_simple_prefix", disabled=True)
                 async def previous_button(self, interaction: discord.Interaction, button: Button):
+                    await interaction.response.defer()
                     if self.page > 0:
                         self.page -= 1
-                        await self.update_message(interaction)
+                        embed = self.create_embed()
+                        await self.update_buttons()
+                        await interaction.edit_original_response(embed=embed, view=self)
                 
                 @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.primary, custom_id="next_simple_prefix")
                 async def next_button(self, interaction: discord.Interaction, button: Button):
+                    await interaction.response.defer()
                     if self.page < self.total_pages - 1:
                         self.page += 1
-                        await self.update_message(interaction)
+                        embed = self.create_embed()
+                        await self.update_buttons()
+                        await interaction.edit_original_response(embed=embed, view=self)
                 
                 @discord.ui.button(label="❌ Close", style=discord.ButtonStyle.danger)
                 async def close_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.edit_message(content="View closed.", embed=None, view=None)
+                    await interaction.response.defer()
+                    await interaction.edit_original_response(content="View closed.", embed=None, view=None)
                     self.stop()
             
             # Create and send initial view
             view = SimplePaginatedView(records)
-            await view.send_initial()
+            embed = view.create_embed()
+            await view.update_buttons()
+            
+            await ctx.send(embed=embed, view=view)
             
         except Exception as e:
             print(f"Error in show_simple prefix command: {e}")
+            traceback.print_exc()
             await ctx.send("An error occurred while fetching records.")
     
     async def change_command(self, interaction: discord.Interaction, wallet_address: str, column_name: str, new_value: str):
         """Change a specific field for a wallet address (slash command)"""
+        # CRITICAL FIX: Defer IMMEDIATELY at the start
         await interaction.response.defer()
         
         valid_columns = [
@@ -956,6 +958,7 @@ class TalentHubBot:
     
     async def remove_command(self, interaction: discord.Interaction, wallet_address: str):
         """Remove a record by wallet address (slash command)"""
+        # CRITICAL FIX: Defer IMMEDIATELY at the start
         await interaction.response.defer()
         
         # Check if record exists
@@ -996,6 +999,7 @@ class TalentHubBot:
             
             @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger)
             async def confirm_delete(self, interaction: discord.Interaction, button: Button):
+                await interaction.response.defer()
                 self.confirmed = True
                 
                 # Delete the record
@@ -1008,7 +1012,7 @@ class TalentHubBot:
                         color=discord.Color.red()
                     )
                     
-                    await interaction.response.edit_message(embed=embed, view=None)
+                    await interaction.edit_original_response(embed=embed, view=None)
                     
                     # Notify submission channel
                     try:
@@ -1025,7 +1029,7 @@ class TalentHubBot:
                     except Exception as e:
                         print(f"Error notifying channel: {e}")
                 else:
-                    await interaction.response.edit_message(
+                    await interaction.edit_original_response(
                         content="Failed to delete the record.",
                         embed=None,
                         view=None
@@ -1035,7 +1039,8 @@ class TalentHubBot:
             
             @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
             async def cancel(self, interaction: discord.Interaction, button: Button):
-                await interaction.response.edit_message(
+                await interaction.response.defer()
+                await interaction.edit_original_response(
                     content="Deletion cancelled.",
                     embed=None,
                     view=None
@@ -1081,6 +1086,7 @@ class TalentHubBot:
             
             @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger)
             async def confirm_delete(self, interaction: discord.Interaction, button: Button):
+                await interaction.response.defer()
                 self.confirmed = True
                 
                 # Delete the record
@@ -1122,6 +1128,7 @@ class TalentHubBot:
             
             @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
             async def cancel(self, interaction: discord.Interaction, button: Button):
+                await interaction.response.defer()
                 await interaction.message.edit(
                     content="Deletion cancelled.",
                     embed=None,
@@ -1133,9 +1140,6 @@ class TalentHubBot:
         view = ConfirmView(self, wallet_address, is_slash=False)
         confirm_msg = await ctx.send(embed=embed, view=view)
     
-    # ... (keep the rest of your existing methods the same - from _update_excel_status onwards)
-    # The rest of the class remains unchanged from your original code
-
     async def _update_excel_status(self, wallet_address: str, new_status: str) -> bool:
         try:
             wb = load_workbook(self.excel_file)
@@ -1304,10 +1308,12 @@ class TalentHubBot:
     async def on_ready(self):
         print(f'Bot logged in as {self.bot.user}')
         try:
+            # Sync commands globally
             synced = await self.bot.tree.sync()
             print(f"Synced {len(synced)} command(s)")
         except Exception as e:
             print(f"Error syncing commands: {e}")
+            traceback.print_exc()
     
     async def on_interaction(self, interaction: discord.Interaction):
         if interaction.type != discord.InteractionType.component:
@@ -1318,25 +1324,33 @@ class TalentHubBot:
             if ':' not in custom_id:
                 return
                 
-            action_type, action, wallet = custom_id.split(':', 2)
-            
+            # Try different splitting patterns
+            parts = custom_id.split(':', 2)
+            if len(parts) == 3:
+                action_type, action, wallet = parts
+            elif len(parts) == 2:
+                action, wallet = parts
+                action_type = "submission"  # Default to submission
+            else:
+                return
+
             if action_type == "submission":
                 await self._handle_submission_interaction(interaction, action, wallet)
             elif action_type == "update":
                 await self._handle_update_interaction(interaction, action, wallet)
                 
-        except ValueError:
-            try:
-                action, wallet = custom_id.split(':', 1)
-                await self._handle_submission_interaction(interaction, action, wallet)
-            except:
-                return
         except Exception as e:
             print(f"Error handling interaction: {e}")
-            await interaction.response.send_message(
-                "An error occurred while processing your request!",
-                ephemeral=True
-            )
+            traceback.print_exc()
+            # Try to respond to the interaction if it's still valid
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        "An error occurred while processing your request!",
+                        ephemeral=True
+                    )
+            except:
+                pass
     
     async def _handle_submission_interaction(self, interaction: discord.Interaction, action: str, wallet: str):
         submission = self.pending_submissions.get(wallet)
@@ -1626,6 +1640,7 @@ class TalentHubBot:
             
         except Exception as e:
             print(f"Error posting submission: {e}")
+            traceback.print_exc()
             return None
     
     async def post_update_request(self, wallet_address: str, updates: dict) -> Optional[discord.Message]:
@@ -1659,11 +1674,15 @@ class TalentHubBot:
             
         except Exception as e:
             print(f"Error posting update request: {e}")
+            traceback.print_exc()
             return None
     
     def start(self):
         """Start the bot"""
-        self.bot.run(self.bot_code)
+        if self.bot_code:
+            self.bot.run(self.bot_code)
+        else:
+            print("Error: DISCORD_BOT token not found in environment variables")
 
 
 class SubmissionChangesModal(Modal, title="Edit Submission"):
