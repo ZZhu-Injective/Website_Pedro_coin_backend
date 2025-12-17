@@ -114,6 +114,9 @@ async def talent_submit(request, address):
     try:
         data = json.loads(request.body.decode('utf-8'))
         
+        if not data.get('walletAddress'):
+            return JsonResponse({'error': 'Missing wallet address'}, status=400)
+            
         if data.get('walletAddress') != address:
             return JsonResponse({'error': 'Wallet mismatch'}, status=400)
         
@@ -122,18 +125,28 @@ async def talent_submit(request, address):
                 talent_hub_bot.post_submission(data),
                 talent_hub_bot.loop
             )
-            message = future.result(timeout=10)
+            message = future.result(timeout=15)  
             
             return JsonResponse({
                 'success': True,
                 'message_id': str(message.id)
             })
+        except asyncio.TimeoutError:
+            return JsonResponse({
+                'error': 'Processing timeout',
+                'success': False
+            }, status=202)
         except Exception as e:
+            print(f"Discord error: {e}")
             return JsonResponse({'error': str(e)}, status=500)
             
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        print(f"Unexpected error: {e}")
+        return JsonResponse({'error': 'Internal error'}, status=500)
     
+
 async def talent(request):
     try:
         talent = TalentDataReaders()
