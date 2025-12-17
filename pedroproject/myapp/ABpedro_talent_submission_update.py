@@ -45,29 +45,24 @@ class TalentHubBot:
         self.bot.event(self.on_ready)
         self.bot.event(self.on_interaction)
         
-        self.bot.tree.command(name="show")(self.show_command)
-        self.bot.tree.command(name="show_simple")(self.show_simple_command)
-        self.bot.tree.command(name="change")(self.change_command)
-        self.bot.tree.command(name="remove")(self.remove_command)
-        self.bot.tree.command(name="column_names")(self.column_names_command)
+        self.bot.tree.command(name="job_show")(self.show_command)
+        self.bot.tree.command(name="job_change")(self.change_command)
+        self.bot.tree.command(name="job_remove")(self.remove_command)
+        self.bot.tree.command(name="job_variable")(self.column_names_command)
         
-        @self.bot.command(name="show")
+        @self.bot.command(name="job_show")
         async def show_prefix(ctx):
             await self.show_prefix_command(ctx)
             
-        @self.bot.command(name="show_simple")
-        async def show_simple_prefix(ctx):
-            await self.show_simple_prefix_command(ctx)
-            
-        @self.bot.command(name="change")
+        @self.bot.command(name="job_change")
         async def change_prefix(ctx, wallet_address: str, column_name: str, *, new_value: str):
             await self.change_prefix_command(ctx, wallet_address, column_name, new_value)
             
-        @self.bot.command(name="remove")
+        @self.bot.command(name="job_remove")
         async def remove_prefix(ctx, wallet_address: str):
             await self.remove_prefix_command(ctx, wallet_address)
             
-        @self.bot.command(name="column_names")
+        @self.bot.command(name="job_variable")
         async def column_names_prefix(ctx):
             await self.column_names_prefix_command(ctx)
     
@@ -300,7 +295,7 @@ class TalentHubBot:
             return None
     
     async def column_names_command(self, interaction: discord.Interaction):
-        """Show all available column names (slash command)"""
+        """Show all available variables in the database"""
         await interaction.response.defer(ephemeral=True)
         
         try:
@@ -515,94 +510,6 @@ class TalentHubBot:
                 ephemeral=True
             )
     
-    async def show_simple_command(self, interaction: discord.Interaction):
-        """Show simple list of names and wallets (slash command)"""
-        await interaction.response.defer()
-        
-        try:
-            records = await self._get_all_records()
-            
-            if not records:
-                await interaction.followup.send("No records found in the database.")
-                return
-            
-            class SimplePaginatedView(View):
-                def __init__(self, records: List[Tuple[str, str]], page: int = 0):
-                    super().__init__(timeout=180)
-                    self.records = records
-                    self.page = page
-                    self.records_per_page = 15  
-                    self.total_pages = (len(records) + self.records_per_page - 1) // self.records_per_page
-                
-                def create_embed(self):
-                    """Create embed for current page"""
-                    start_idx = self.page * self.records_per_page
-                    end_idx = min(start_idx + self.records_per_page, len(self.records))
-                    
-                    embed = discord.Embed(
-                        title="Talent Database - Simple View",
-                        description=f"Showing records {start_idx + 1}-{end_idx} of {len(self.records)}",
-                        color=discord.Color.green()
-                    )
-                    
-                    page_records = self.records[start_idx:end_idx]
-                    for name, wallet in page_records:
-                        embed.add_field(
-                            name=f"{name}",
-                            value=f"`{wallet}`",
-                            inline=True
-                        )
-                    
-                    embed.set_footer(text=f"Page {self.page + 1}/{self.total_pages} | Use buttons to navigate")
-                    return embed
-                
-                async def update_buttons(self):
-                    """Update button states"""
-                    for child in self.children:
-                        if child.custom_id == "prev_simple":
-                            child.disabled = self.page == 0
-                        elif child.custom_id == "next_simple":
-                            child.disabled = self.page == self.total_pages - 1
-                
-                @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.primary, custom_id="prev_simple", disabled=True)
-                async def previous_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.defer()
-                    if self.page > 0:
-                        self.page -= 1
-                        embed = self.create_embed()
-                        await self.update_buttons()
-                        await interaction.edit_original_response(embed=embed, view=self)
-                
-                @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.primary, custom_id="next_simple")
-                async def next_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.defer()
-                    if self.page < self.total_pages - 1:
-                        self.page += 1
-                        embed = self.create_embed()
-                        await self.update_buttons()
-                        await interaction.edit_original_response(embed=embed, view=self)
-                
-                @discord.ui.button(label="❌ Close", style=discord.ButtonStyle.danger)
-                async def close_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.defer()
-                    await interaction.edit_original_response(content="View closed.", embed=None, view=None)
-                    self.stop()
-            
-            view = SimplePaginatedView(records)
-            
-            embed = view.create_embed()
-            await view.update_buttons()
-            
-            await interaction.followup.send(embed=embed, view=view)
-            
-        except Exception as e:
-            print(f"Error in show_simple command: {e}")
-            traceback.print_exc()
-            await interaction.followup.send(
-                "An error occurred while fetching records.",
-                ephemeral=True
-            )
-    
     async def show_prefix_command(self, ctx: commands.Context):
         """Show all records in the database with pagination (prefix command)"""
         try:
@@ -682,88 +589,6 @@ class TalentHubBot:
             
         except Exception as e:
             print(f"Error in show prefix command: {e}")
-            traceback.print_exc()
-            await ctx.send("An error occurred while fetching records.")
-    
-    async def show_simple_prefix_command(self, ctx: commands.Context):
-        """Show simple list of names and wallets (prefix command)"""
-        try:
-            records = await self._get_all_records()
-            
-            if not records:
-                await ctx.send("No records found in the database.")
-                return
-            
-            class SimplePaginatedView(View):
-                def __init__(self, records: List[Tuple[str, str]], page: int = 0):
-                    super().__init__(timeout=180)
-                    self.records = records
-                    self.page = page
-                    self.records_per_page = 15
-                    self.total_pages = (len(records) + self.records_per_page - 1) // self.records_per_page
-                
-                def create_embed(self):
-                    """Create embed for current page"""
-                    start_idx = self.page * self.records_per_page
-                    end_idx = min(start_idx + self.records_per_page, len(self.records))
-                    
-                    embed = discord.Embed(
-                        title="Talent Database - Simple View",
-                        description=f"Showing records {start_idx + 1}-{end_idx} of {len(self.records)}",
-                        color=discord.Color.green()
-                    )
-                    
-                    page_records = self.records[start_idx:end_idx]
-                    for name, wallet in page_records:
-                        embed.add_field(
-                            name=f"{name}",
-                            value=f"`{wallet}`",
-                            inline=True
-                        )
-                    
-                    embed.set_footer(text=f"Page {self.page + 1}/{self.total_pages} | Use buttons to navigate")
-                    return embed
-                
-                async def update_buttons(self):
-                    """Update button states"""
-                    for child in self.children:
-                        if child.custom_id == "prev_simple_prefix":
-                            child.disabled = self.page == 0
-                        elif child.custom_id == "next_simple_prefix":
-                            child.disabled = self.page == self.total_pages - 1
-                
-                @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.primary, custom_id="prev_simple_prefix", disabled=True)
-                async def previous_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.defer()
-                    if self.page > 0:
-                        self.page -= 1
-                        embed = self.create_embed()
-                        await self.update_buttons()
-                        await interaction.edit_original_response(embed=embed, view=self)
-                
-                @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.primary, custom_id="next_simple_prefix")
-                async def next_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.defer()
-                    if self.page < self.total_pages - 1:
-                        self.page += 1
-                        embed = self.create_embed()
-                        await self.update_buttons()
-                        await interaction.edit_original_response(embed=embed, view=self)
-                
-                @discord.ui.button(label="❌ Close", style=discord.ButtonStyle.danger)
-                async def close_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.defer()
-                    await interaction.edit_original_response(content="View closed.", embed=None, view=None)
-                    self.stop()
-            
-            view = SimplePaginatedView(records)
-            embed = view.create_embed()
-            await view.update_buttons()
-            
-            await ctx.send(embed=embed, view=view)
-            
-        except Exception as e:
-            print(f"Error in show_simple prefix command: {e}")
             traceback.print_exc()
             await ctx.send("An error occurred while fetching records.")
     
