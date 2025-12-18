@@ -119,18 +119,20 @@ async def talent_submit(request, address):
             
         if data.get('walletAddress') != address:
             return JsonResponse({'error': 'Wallet mismatch'}, status=400)
-        
+
         try:
             future = asyncio.run_coroutine_threadsafe(
-                talent_hub_bot.post_submission(data),
+                talent_hub_bot.submit_from_thread(data),
                 talent_hub_bot.loop
             )
-            message = future.result(timeout=15)  
+
+            message = future.result(timeout=5)
             
             return JsonResponse({
                 'success': True,
                 'message_id': str(message.id)
             })
+            
         except asyncio.TimeoutError:
             return JsonResponse({
                 'error': 'Processing timeout',
@@ -146,6 +148,29 @@ async def talent_submit(request, address):
         print(f"Unexpected error: {e}")
         return JsonResponse({'error': 'Internal error'}, status=500)
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 async def talent(request):
     try:
