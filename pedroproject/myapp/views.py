@@ -55,15 +55,9 @@ Bot for Pedro Discord on Talent/Approval Channel. Where it show the talented to 
 """
 
 def start_bot():
-    def run_bot():
-        load_dotenv() 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        talent_hub_bot.loop = loop
-
-    if not hasattr(start_bot, 'bot_started'):
-        bot_thread = threading.Thread(target=run_bot, daemon=True)
-        bot_thread.start()
+    """Start the Discord bot in a separate thread"""
+    if not hasattr(start_bot, 'bot_started') or not talent_hub_bot._bot_thread.is_alive():
+        talent_hub_bot.start_bot_async()
         start_bot.bot_started = True
         logger.info("Discord bot started successfully")
 
@@ -120,16 +114,25 @@ async def talent_submit(request, address):
             return JsonResponse({'error': 'Wallet mismatch'}, status=400)
 
         try:
+            # Add submission to queue
             success = talent_hub_bot.submit_from_thread(data)
             
             if success:
-                await talent_hub_bot._save_new_submission(data)
-
-                talent_hub_bot.start_bot()
+                # Save to Excel
+                excel_success = await talent_hub_bot._save_new_submission(data)
+                
+                if not excel_success:
+                    return JsonResponse({
+                        'error': 'Failed to save to Excel',
+                        'success': False
+                    }, status=500)
+                
+                # Start bot if not already running (in background thread)
+                talent_hub_bot.start_bot_async()
                 
                 return JsonResponse({
                     'success': True,
-                    'message': 'Talent profile submitted successfully and sent to Discord for review'
+                    'message': 'Talent profile submitted successfully! It will be reviewed soon.'
                 })
             else:
                 return JsonResponse({

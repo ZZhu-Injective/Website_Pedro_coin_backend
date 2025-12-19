@@ -4,16 +4,18 @@ import discord
 from discord.ext import commands
 from discord.ui import Button, View, Select
 from openpyxl import Workbook, load_workbook
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Optional, List, Tuple, Any
 from dotenv import load_dotenv
 import traceback
 import queue as thread_queue
+import threading
 
 load_dotenv()
 
 class TalentHubBot:
     _instance = None
+    _bot_started = False
     
     def __new__(cls):
         if cls._instance is None:
@@ -29,7 +31,6 @@ class TalentHubBot:
         self.excel_file = "Atalent_submissions.xlsx"
         self.bot_code = os.getenv("DISCORD_BOT")
         
-        # Initialize bot only if token exists
         if self.bot_code:
             intents = discord.Intents.default()
             intents.message_content = True
@@ -40,7 +41,10 @@ class TalentHubBot:
                 max_messages=None
             )
             
-            # Setup bot events and commands
+            self._bot_running = False
+            self._bot_loop = None
+            self._bot_ready = threading.Event()
+            
             self._setup_bot()
         else:
             print("⚠️ DISCORD_BOT token not found. Bot functionality disabled.")
@@ -56,10 +60,10 @@ class TalentHubBot:
             
     def _setup_bot(self):
         """Setup bot events and commands"""
-        # Setup events
-        self.bot.event(self.on_ready)
+        @self.bot.event
+        async def on_ready():
+            await self._on_ready_callback()
         
-        # Setup slash commands
         self.bot.tree.command(name="job_open")(self.job_open_command)
         self.bot.tree.command(name="job_show")(self.show_command)
         self.bot.tree.command(name="job_change")(self.change_command)
@@ -67,7 +71,6 @@ class TalentHubBot:
         self.bot.tree.command(name="job_variable")(self.column_names_command)
         self.bot.tree.command(name="job_status")(self.job_status_command)
         
-        # Setup prefix commands
         @self.bot.command(name="job_open")
         async def job_open_prefix(ctx):
             await self.job_open_prefix_command(ctx)
@@ -92,10 +95,90 @@ class TalentHubBot:
         async def column_names_prefix(ctx):
             await self.column_names_prefix_command(ctx)
             
-        # Setup interaction handling
         @self.bot.event
         async def on_interaction(interaction):
             await self._handle_interaction(interaction)
+    
+    async def _on_ready_callback(self):
+        """Callback when bot is ready"""
+        print(f'✅ Bot logged in as {self.bot.user}')
+        print(f'✅ Bot ID: {self.bot.user.id}')
+        print(f'✅ Submission channel ID: {self.submission_channel_id}')
+        
+        self._bot_loop = asyncio.get_event_loop()
+        self._bot_ready.set()
+        self._bot_running = True
+        print(f"✅ Bot ready and loop set: {self._bot_loop}")
+        
+        await self._test_excel_access()
+        
+        channel = self.bot.get_channel(self.submission_channel_id)
+        if channel:
+            print(f'✅ Found submission channel: #{channel.name} ({channel.id})')
+            permissions = channel.permissions_for(channel.guild.me)
+            print(f'✅ Bot permissions in channel:')
+            print(f'   - Send Messages: {permissions.send_messages}')
+            print(f'   - Embed Links: {permissions.embed_links}')
+            print(f'   - Read Messages: {permissions.read_messages}')
+        else:
+            print(f"❌ Cannot find channel with ID {self.submission_channel_id}")
+            print('💡 Make sure:')
+            print('   1. The bot is added to your Discord server')
+            print('   2. The channel ID is correct')
+            print('   3. The bot has permission to view the channel')
+        
+        try:
+            synced = await self.bot.tree.sync()
+            print(f"✅ Synced {len(synced)} command(s)")
+            
+            counts = await self._get_status_counts()
+            
+            if channel:
+                notification = f"🤖 **Talent Hub Bot is ready!**\n"
+                notification += f"📊 **Status:** {counts['Pending']} pending, {counts['Approved']} approved, {counts['Rejected']} rejected\n"
+                notification += f"💡 Use `/job_open` to review pending submissions"
+                
+                ready_embed = discord.Embed(
+                    title="🤖 Talent Hub Bot Online",
+                    description=notification,
+                    color=discord.Color.green()
+                )
+                ready_embed.set_footer(text="Ready to receive new submissions!")
+                await channel.send(embed=ready_embed)
+            
+            # Start processing queued submissions
+            asyncio.create_task(self._process_queued_submissions())
+            
+            # Start periodic notifications
+            asyncio.create_task(self._periodic_notifications())
+            
+        except Exception as e:
+            print(f"❌ Error during bot ready: {e}")
+            traceback.print_exc()
+    
+    async def _process_queued_submissions(self):
+        """Process any submissions that were queued before bot was ready"""
+        print("🔄 Processing queued submissions...")
+        
+        # Wait a moment for everything to stabilize
+        await asyncio.sleep(5)
+        
+        try:
+            while not self._thread_submission_queue.empty():
+                try:
+                    data = self._thread_submission_queue.get_nowait()
+                    print(f"🔄 Processing queued submission for: {data.get('walletAddress', 'Unknown')}")
+                    await self._process_new_submission(data)
+                    self._thread_submission_queue.task_done()
+                except Exception as e:
+                    print(f"❌ Error processing queued submission: {e}")
+                    traceback.print_exc()
+            
+            print("✅ All queued submissions processed")
+            
+        except Exception as e:
+            print(f"❌ Error in queue processing: {e}")
+            traceback.print_exc()
     
     async def _handle_interaction(self, interaction: discord.Interaction):
         """Handle button interactions"""
@@ -110,7 +193,28 @@ class TalentHubBot:
                 
             parts = custom_id.split(':', 2)
             
-            if len(parts) == 3:
+            if len(parts) == 2:
+                # New format for quick actions: "quick_approve:wallet" or "review:wallet"
+                action, wallet = parts
+                
+                print(f"[QUICK ACTION] Action: {action}, Wallet: {wallet}")
+                
+                # Respond immediately to avoid timeout
+                if not interaction.response.is_done():
+                    await interaction.response.defer(ephemeral=True)
+                
+                if action == "quick_approve":
+                    await self._handle_quick_approve(interaction, wallet)
+                elif action == "review":
+                    await self._handle_review_button(interaction, wallet)
+                else:
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(
+                            f"❌ Unknown action: {action}",
+                            ephemeral=True
+                        )
+            
+            elif len(parts) == 3:
                 action_type, action, wallet = parts
                 
                 # Debug logging
@@ -149,6 +253,421 @@ class TalentHubBot:
                     )
             except:
                 pass
+    
+    async def _handle_quick_approve(self, interaction: discord.Interaction, wallet: str):
+        """Handle quick approve from notification"""
+        try:
+            # Update status in Excel
+            success = await self._update_excel_status(wallet, "Approved")
+            
+            if success:
+                # Get record details for confirmation
+                record = await self._get_record_details(wallet)
+                
+                if record:
+                    name = record.get('Name', 'Unknown')
+                    # Update the original notification message
+                    try:
+                        # Create updated embed
+                        updated_embed = discord.Embed(
+                            title="✅ **SUBMISSION APPROVED** ✅",
+                            description=f"**{name}** has been approved by {interaction.user.mention}",
+                            color=discord.Color.green()
+                        )
+                        updated_embed.add_field(name="👤 Name", value=name, inline=True)
+                        updated_embed.add_field(name="💼 Role", value=record.get('Role', 'N/A'), inline=True)
+                        updated_embed.add_field(name="💰 Wallet", value=f"`{wallet[:8]}...{wallet[-6:]}`", inline=True)
+                        updated_embed.add_field(name="📅 Approved At", 
+                                              value=datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 
+                                              inline=False)
+                        updated_embed.set_footer(text="Use /job_show to view all approved submissions")
+                        
+                        # Remove buttons from original message
+                        await interaction.message.edit(embed=updated_embed, view=None)
+                    except Exception as e:
+                        print(f"Error updating message: {e}")
+                
+                await interaction.followup.send(
+                    f"✅ **Quick Approved:** {name}'s submission has been approved!",
+                    ephemeral=True
+                )
+                
+                # Send confirmation to main channel
+                channel = self.bot.get_channel(self.submission_channel_id)
+                if channel:
+                    confirmation_embed = discord.Embed(
+                        title="✅ Submission Approved via Quick Action",
+                        description=f"**{name}** was approved by {interaction.user.mention}",
+                        color=discord.Color.green()
+                    )
+                    confirmation_embed.add_field(name="Wallet", value=f"`{wallet}`", inline=False)
+                    await channel.send(embed=confirmation_embed)
+            else:
+                await interaction.followup.send(
+                    f"❌ Failed to approve submission for wallet `{wallet}`",
+                    ephemeral=True
+                )
+                
+        except Exception as e:
+            print(f"[QUICK APPROVE ERROR] {e}")
+            traceback.print_exc()
+            await interaction.followup.send(
+                "❌ An error occurred while processing quick approve.",
+                ephemeral=True
+            )
+
+    async def job_open_command(self, interaction: discord.Interaction):
+        """
+        Open pending submissions to review.
+        Shows dropdown with all pending submissions (name and role).
+        When selected, shows embed with details and Approve/Reject/Close buttons.
+        Updates Excel status accordingly.
+        """
+        await interaction.response.defer()
+        
+        try:
+            # Get pending submissions from Excel
+            pending_records = await self._get_pending_records()
+            
+            if not pending_records:
+                embed = discord.Embed(
+                    title="📭 Pending Submissions",
+                    description="No submissions waiting for review.",
+                    color=discord.Color.green()
+                )
+                await interaction.followup.send(embed=embed)
+                return
+            
+            # Create a selection menu
+            embed = discord.Embed(
+                title="📬 Pending Submissions",
+                description=f"Select a submission to review:",
+                color=discord.Color.blue()
+            )
+            embed.add_field(name="📋 Total Pending", value=f"{len(pending_records)} submission(s)", inline=False)
+            embed.set_footer(text="Select a submission from the dropdown below")
+            
+            # Store the original followup message to delete later
+            original_message = None
+            
+            # Create dropdown with pending submissions
+            class SubmissionSelect(discord.ui.Select):
+                def __init__(self, bot_instance, records):
+                    options = []
+                    for name, wallet in records[:25]:  # Discord limit: 25 options
+                        # Get role for the description - simplified to avoid blocking
+                        options.append(discord.SelectOption(
+                            label=f"{name[:90]}",
+                            description=f"Click to review",
+                            value=wallet,
+                            emoji="📄"
+                        ))
+                    
+                    super().__init__(
+                        placeholder="Choose a submission to review...",
+                        min_values=1,
+                        max_values=1,
+                        options=options
+                    )
+                    self.bot_instance = bot_instance
+                    self.records = records  # Store records for later use
+                
+                async def callback(self, interaction: discord.Interaction):
+                    await interaction.response.defer()
+                    wallet = self.values[0]
+                    
+                    # Get record details
+                    record = await self.bot_instance._get_record_details(wallet)
+                    
+                    if not record:
+                        await interaction.followup.send(
+                            f"❌ Could not find details for wallet: `{wallet}`",
+                            ephemeral=True
+                        )
+                        return
+                    
+                    # Create embed with submission details
+                    detail_embed = discord.Embed(
+                        title=f"📄 Submission Review",
+                        description=f"**{record.get('Name', 'N/A')}** - {record.get('Role', 'N/A')}",
+                        color=discord.Color.blue()
+                    )
+                    
+                    # Basic info
+                    detail_embed.add_field(
+                        name="Basic Info",
+                        value=f"**Experience:** {record.get('Experience', 'N/A')}\n"
+                            f"**Education:** {record.get('Education', 'N/A')}\n"
+                            f"**Location:** {record.get('Location', 'N/A')}\n"
+                            f"**Available:** {record.get('Availability', 'N/A')}",
+                        inline=False
+                    )
+                    
+                    # Wallet info
+                    detail_embed.add_field(
+                        name="Wallet",
+                        value=f"`{wallet}`",
+                        inline=False
+                    )
+                    
+                    # Skills
+                    skills = record.get('Skills', 'N/A')
+                    detail_embed.add_field(
+                        name="Skills",
+                        value=skills[:500] + "..." if len(skills) > 500 else skills,
+                        inline=False
+                    )
+                    
+                    # Languages
+                    languages = record.get('Languages', 'N/A')
+                    detail_embed.add_field(
+                        name="Languages",
+                        value=languages[:200] + "..." if len(languages) > 200 else languages,
+                        inline=False
+                    )
+                    
+                    detail_embed.set_footer(text=f"Wallet: {wallet[:8]}...{wallet[-6:]}")
+                    
+                    # Create review buttons
+                    class ReviewView(discord.ui.View):
+                        def __init__(self, bot_instance, wallet, user_name, original_view):
+                            super().__init__(timeout=180)
+                            self.bot_instance = bot_instance
+                            self.wallet = wallet
+                            self.user_name = user_name
+                            self.original_view = original_view
+                        
+                        @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji="✅", row=0)
+                        async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                            await interaction.response.defer()
+                            
+                            success = await self.bot_instance._update_excel_status(self.wallet, "Approved")
+                            
+                            if success:
+                                # Send confirmation message
+                                confirmation_embed = discord.Embed(
+                                    title="✅ Submission Approved",
+                                    description=f"**{self.wallet}** has been approved by {self.user_name}.",
+                                    color=discord.Color.green()
+                                )
+                                confirmation_embed.add_field(name="Status", value="✅ **APPROVED**", inline=True)
+                                confirmation_embed.add_field(name="Action", value="✅ Approved", inline=True)
+                                confirmation_embed.set_footer(text=f"Completed at {datetime.now().strftime('%H:%M:%S')}")
+                                
+                                # Delete the review message
+                                try:
+                                    await interaction.message.delete()
+                                except:
+                                    pass
+                                
+                                # Send confirmation
+                                await interaction.followup.send(embed=confirmation_embed, ephemeral=True)
+                                
+                                # Also send a public notification to the channel
+                                channel = self.bot_instance.bot.get_channel(self.bot_instance.submission_channel_id)
+                                if channel:
+                                    public_embed = discord.Embed(
+                                        title="✅ Submission Approved",
+                                        description=f"A submission has been approved by {self.user_name}.",
+                                        color=discord.Color.green()
+                                    )
+                                    public_embed.add_field(name="Wallet", value=f"`{self.wallet[:8]}...{self.wallet[-6:]}`", inline=False)
+                                    public_embed.set_footer(text=f"Approved at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                                    await channel.send(embed=public_embed)
+                            else:
+                                await interaction.followup.send(
+                                    f"❌ Failed to approve submission for wallet `{self.wallet}`",
+                                    ephemeral=True
+                                )
+                        
+                        @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji="❌", row=0)
+                        async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                            await interaction.response.defer()
+                            
+                            success = await self.bot_instance._update_excel_status(self.wallet, "Rejected")
+                            
+                            if success:
+                                # Send confirmation message
+                                confirmation_embed = discord.Embed(
+                                    title="❌ Submission Rejected",
+                                    description=f"**{self.wallet}** has been rejected by {self.user_name}.",
+                                    color=discord.Color.red()
+                                )
+                                confirmation_embed.add_field(name="Status", value="❌ **REJECTED**", inline=True)
+                                confirmation_embed.add_field(name="Action", value="❌ Rejected", inline=True)
+                                confirmation_embed.set_footer(text=f"Completed at {datetime.now().strftime('%H:%M:%S')}")
+                                
+                                # Delete the review message
+                                try:
+                                    await interaction.message.delete()
+                                except:
+                                    pass
+                                
+                                # Send confirmation
+                                await interaction.followup.send(embed=confirmation_embed, ephemeral=True)
+                                
+                                # Also send a public notification to the channel
+                                channel = self.bot_instance.bot.get_channel(self.bot_instance.submission_channel_id)
+                                if channel:
+                                    public_embed = discord.Embed(
+                                        title="❌ Submission Rejected",
+                                        description=f"A submission has been rejected by {self.user_name}.",
+                                        color=discord.Color.red()
+                                    )
+                                    public_embed.add_field(name="Wallet", value=f"`{self.wallet[:8]}...{self.wallet[-6:]}`", inline=False)
+                                    public_embed.set_footer(text=f"Rejected at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                                    await channel.send(embed=public_embed)
+                            else:
+                                await interaction.followup.send(
+                                    f"❌ Failed to reject submission for wallet `{self.wallet}`",
+                                    ephemeral=True
+                                )
+                        
+                        @discord.ui.button(label="View Full Details", style=discord.ButtonStyle.secondary, emoji="👁️", row=1)
+                        async def view_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                            await interaction.response.defer()
+                            
+                            record = await self.bot_instance._get_record_details(self.wallet)
+                            
+                            if not record:
+                                await interaction.followup.send(
+                                    f"❌ Could not find details for wallet: `{self.wallet}`",
+                                    ephemeral=True
+                                )
+                                return
+                            
+                            # Create a more detailed embed
+                            full_embed = discord.Embed(
+                                title=f"📋 Full Submission Details",
+                                description=f"**{record.get('Name', 'N/A')}**",
+                                color=discord.Color.green()
+                            )
+                            
+                            # Professional Info
+                            full_embed.add_field(
+                                name="Professional Info",
+                                value=f"**Role:** {record.get('Role', 'N/A')}\n"
+                                    f"**Injective Role:** {record.get('Injective Role', 'N/A')}\n"
+                                    f"**Experience:** {record.get('Experience', 'N/A')}\n"
+                                    f"**Education:** {record.get('Education', 'N/A')}\n"
+                                    f"**Location:** {record.get('Location', 'N/A')}\n"
+                                    f"**Monthly Rate:** {record.get('Monthly Rate', 'N/A')}\n"
+                                    f"**Available:** {record.get('Availability', 'N/A')}",
+                                inline=False
+                            )
+                            
+                            # Contact info
+                            contact_info = [
+                                f"**Discord:** {record.get('Discord', '-')}",
+                                f"**Email:** {record.get('Email', '-')}",
+                                f"**Phone:** {record.get('Phone', '-')}",
+                                f"**Telegram:** {record.get('Telegram', '-')}",
+                                f"**X/Twitter:** {record.get('X', '-')}",
+                                f"**GitHub:** {record.get('Github', '-')}"
+                            ]
+                            full_embed.add_field(
+                                name="Contact Information",
+                                value="\n".join(contact_info),
+                                inline=False
+                            )
+                            
+                            # Wallet info
+                            full_embed.add_field(
+                                name="Wallet Information",
+                                value=f"**Address:** `{self.wallet}`\n"
+                                    f"**Type:** {record.get('Wallet Type', 'N/A')}\n"
+                                    f"**NFT Holdings:** {record.get('NFT Holdings', 'N/A')}\n"
+                                    f"**Token Holdings:** {record.get('Token Holdings', 'N/A')}",
+                                inline=False
+                            )
+                            
+                            # Links
+                            links = []
+                            portfolio = record.get('Portfolio', '')
+                            if portfolio and portfolio != 'N/A' and portfolio != '-':
+                                links.append(f"**Portfolio:** [Link]({portfolio})")
+                            
+                            cv = record.get('CV', '')
+                            if cv and cv != 'N/A' and cv != '-':
+                                links.append(f"**CV/Resume:** [Download]({cv})")
+                            
+                            image = record.get('Image url', '')
+                            if image and image != 'N/A' and image != '-':
+                                links.append(f"**Profile Picture:** [View]({image})")
+                            
+                            if links:
+                                full_embed.add_field(
+                                    name="Links",
+                                    value="\n".join(links),
+                                    inline=False
+                                )
+                            
+                            # Bio
+                            bio = record.get('Bio', 'No bio provided')
+                            full_embed.add_field(
+                                name="Bio",
+                                value=f"{bio[:1000]}{'...' if len(bio) > 1000 else ''}",
+                                inline=False
+                            )
+                            
+                            full_embed.set_footer(text=f"Wallet: {self.wallet[:8]}...{self.wallet[-6:]}")
+                            
+                            await interaction.followup.send(embed=full_embed, ephemeral=True)
+                        
+                        @discord.ui.button(label="Close Review", style=discord.ButtonStyle.secondary, emoji="❌", row=1)
+                        async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                            await interaction.response.defer()
+                            
+                            # Delete the review message
+                            try:
+                                await interaction.message.delete()
+                            except:
+                                pass
+                            
+                            # Send confirmation
+                            await interaction.followup.send(
+                                "✅ Review closed. Use `/job_open` to review another submission.",
+                                ephemeral=True
+                            )
+                    
+                    await interaction.followup.send(
+                        embed=detail_embed, 
+                        view=ReviewView(self.bot_instance, wallet, interaction.user.name, self.view),
+                        ephemeral=True
+                    )
+            
+            class SubmissionView(discord.ui.View):
+                def __init__(self, bot_instance, records):
+                    super().__init__(timeout=180)
+                    self.add_item(SubmissionSelect(bot_instance, records))
+                    self.bot_instance = bot_instance
+                
+                @discord.ui.button(label="Close Menu", style=discord.ButtonStyle.secondary, row=1)
+                async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                    await interaction.response.defer()
+                    
+                    # Delete the menu message
+                    try:
+                        await interaction.message.delete()
+                    except:
+                        pass
+                    
+                    # Send confirmation
+                    await interaction.followup.send(
+                        "✅ Menu closed. Use `/job_open` to review submissions again.",
+                        ephemeral=True
+                    )
+            
+            view = SubmissionView(self, pending_records)
+            original_message = await interaction.followup.send(embed=embed, view=view)
+            
+        except Exception as e:
+            print(f"❌ Error in job_open command: {e}")
+            traceback.print_exc()
+            await interaction.followup.send(
+                "An error occurred while opening pending submissions.",
+                ephemeral=True
+            )
     
     def _ensure_excel_file(self):
         """Ensure the Excel file exists with correct headers, if not then create it."""
@@ -528,18 +1047,10 @@ class TalentHubBot:
                 def __init__(self, bot_instance, records):
                     options = []
                     for name, wallet in records[:25]:  # Discord limit: 25 options
-                        # Get role for the description
-                        role = "N/A"
-                        details = asyncio.run_coroutine_threadsafe(
-                            bot_instance._get_record_details(wallet),
-                            bot_instance.bot.loop
-                        ).result()
-                        if details:
-                            role = details.get('Role', 'N/A')
-                        
+                        # Get role for the description - simplified to avoid blocking
                         options.append(discord.SelectOption(
                             label=f"{name[:90]}",
-                            description=f"{role[:45]}",
+                            description=f"Click to review",
                             value=wallet,
                             emoji="📄"
                         ))
@@ -551,6 +1062,7 @@ class TalentHubBot:
                         options=options
                     )
                     self.bot_instance = bot_instance
+                    self.records = records  # Store records for later use
                 
                 async def callback(self, interaction: discord.Interaction):
                     await interaction.response.defer()
@@ -577,9 +1089,9 @@ class TalentHubBot:
                     detail_embed.add_field(
                         name="Basic Info",
                         value=f"**Experience:** {record.get('Experience', 'N/A')}\n"
-                              f"**Education:** {record.get('Education', 'N/A')}\n"
-                              f"**Location:** {record.get('Location', 'N/A')}\n"
-                              f"**Available:** {record.get('Availability', 'N/A')}",
+                            f"**Education:** {record.get('Education', 'N/A')}\n"
+                            f"**Location:** {record.get('Location', 'N/A')}\n"
+                            f"**Available:** {record.get('Availability', 'N/A')}",
                         inline=False
                     )
                     
@@ -724,12 +1236,12 @@ class TalentHubBot:
                             full_embed.add_field(
                                 name="Professional Info",
                                 value=f"**Role:** {record.get('Role', 'N/A')}\n"
-                                      f"**Injective Role:** {record.get('Injective Role', 'N/A')}\n"
-                                      f"**Experience:** {record.get('Experience', 'N/A')}\n"
-                                      f"**Education:** {record.get('Education', 'N/A')}\n"
-                                      f"**Location:** {record.get('Location', 'N/A')}\n"
-                                      f"**Monthly Rate:** {record.get('Monthly Rate', 'N/A')}\n"
-                                      f"**Available:** {record.get('Availability', 'N/A')}",
+                                    f"**Injective Role:** {record.get('Injective Role', 'N/A')}\n"
+                                    f"**Experience:** {record.get('Experience', 'N/A')}\n"
+                                    f"**Education:** {record.get('Education', 'N/A')}\n"
+                                    f"**Location:** {record.get('Location', 'N/A')}\n"
+                                    f"**Monthly Rate:** {record.get('Monthly Rate', 'N/A')}\n"
+                                    f"**Available:** {record.get('Availability', 'N/A')}",
                                 inline=False
                             )
                             
@@ -752,9 +1264,9 @@ class TalentHubBot:
                             full_embed.add_field(
                                 name="Wallet Information",
                                 value=f"**Address:** `{self.wallet}`\n"
-                                      f"**Type:** {record.get('Wallet Type', 'N/A')}\n"
-                                      f"**NFT Holdings:** {record.get('NFT Holdings', 'N/A')}\n"
-                                      f"**Token Holdings:** {record.get('Token Holdings', 'N/A')}",
+                                    f"**Type:** {record.get('Wallet Type', 'N/A')}\n"
+                                    f"**NFT Holdings:** {record.get('NFT Holdings', 'N/A')}\n"
+                                    f"**Token Holdings:** {record.get('Token Holdings', 'N/A')}",
                                 inline=False
                             )
                             
@@ -803,6 +1315,27 @@ class TalentHubBot:
                         ephemeral=True
                     )
             
+            class SubmissionView(discord.ui.View):
+                def __init__(self, bot_instance, records):
+                    super().__init__(timeout=180)
+                    self.add_item(SubmissionSelect(bot_instance, records))
+                
+                @discord.ui.button(label="Close Menu", style=discord.ButtonStyle.secondary, row=1)
+                async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                    await interaction.response.defer()
+                    await interaction.message.delete()
+                    await interaction.followup.send("✅ Menu closed.", ephemeral=True)
+            
+            view = SubmissionView(self, pending_records)
+            await interaction.followup.send(embed=embed, view=view)
+            
+        except Exception as e:
+            print(f"❌ Error in job_open command: {e}")
+            traceback.print_exc()
+            await interaction.followup.send(
+                "An error occurred while opening pending submissions.",
+                ephemeral=True
+            )
             class SubmissionView(discord.ui.View):
                 def __init__(self, bot_instance, records):
                     super().__init__(timeout=180)
@@ -1592,45 +2125,6 @@ class TalentHubBot:
             traceback.print_exc()
             return False
     
-    async def on_ready(self):
-        """Called when bot is ready and connected to Discord"""
-        print(f'✅ Bot logged in as {self.bot.user}')
-        print(f'✅ Bot ID: {self.bot.user.id}')
-        print(f'✅ Submission channel ID: {self.submission_channel_id}')
-        
-        await self._test_excel_access()
-        
-        channel = self.bot.get_channel(self.submission_channel_id)
-        if channel:
-            print(f'✅ Found submission channel: #{channel.name} ({channel.id})')
-            permissions = channel.permissions_for(channel.guild.me)
-            print(f'✅ Bot permissions in channel:')
-            print(f'   - Send Messages: {permissions.send_messages}')
-            print(f'   - Embed Links: {permissions.embed_links}')
-            print(f'   - Read Messages: {permissions.read_messages}')
-        else:
-            print(f'❌ Cannot find channel with ID {self.submission_channel_id}')
-            print('💡 Make sure:')
-            print('   1. The bot is added to your Discord server')
-            print('   2. The channel ID is correct')
-            print('   3. The bot has permission to view the channel')
-        
-        try:
-            synced = await self.bot.tree.sync()
-            print(f"✅ Synced {len(synced)} command(s)")
-            
-            counts = await self._get_status_counts()
-            
-            if channel:
-                notification = f"🤖 Talent Hub Bot is ready!\n"
-                notification += f"📊 **Status:** {counts['Pending']} pending, {counts['Approved']} approved, {counts['Rejected']} rejected\n"
-                notification += f"💡 Use `/job_open` to review pending submissions"
-                await channel.send(notification)
-            
-        except Exception as e:
-            print(f"❌ Error syncing commands: {e}")
-            traceback.print_exc()
-    
     async def _test_excel_access(self):
         """Test if we can read/write to Excel file"""
         try:
@@ -1663,31 +2157,86 @@ class TalentHubBot:
                 print(f"[SUBMISSION ERROR] No wallet address in data")
                 return
             
-            # Save to Excel with status "Pending"
-            excel_success = await self._save_new_submission(data)
-            if not excel_success:
-                print(f"⚠️ [SUBMISSION WARNING] Failed to save submission for {wallet} to Excel")
-                return
-            
-            print(f"✅ [SUBMISSION SUCCESS] Saved submission for: {wallet}")
-            print(f"   Name: {data.get('name')}")
-            print(f"   Role: {data.get('role')}")
-            print(f"   Status: Pending")
+            print(f"📢 Processing Discord notification for: {wallet}")
             
             # Send notification to Discord channel
-            channel = self.bot.get_channel(self.submission_channel_id)
-            if channel:
-                notification_embed = discord.Embed(
-                    title="📥 New Submission Received",
-                    description=f"**{data.get('name', 'Unknown')}** has submitted their talent profile.",
-                    color=discord.Color.green()
-                )
-                notification_embed.add_field(name="Role", value=data.get('role', 'N/A'), inline=True)
-                notification_embed.add_field(name="Status", value="Pending for review", inline=True)
-                notification_embed.set_footer(text=f"Use /job_open to review | Wallet: {wallet[:8]}...{wallet[-6:]}")
+            if self.bot and self._bot_running:
+                channel = self.bot.get_channel(self.submission_channel_id)
+                if channel:
+                    # Create a more detailed notification embed
+                    notification_embed = discord.Embed(
+                        title="📬 **NEW SUBMISSION RECEIVED** 📬",
+                        description=f"**{data.get('name', 'Unknown')}** has submitted a new talent profile.",
+                        color=discord.Color.gold()
+                    )
+                    
+                    # Add important fields
+                    notification_embed.add_field(name="👤 Name", value=data.get('name', 'N/A'), inline=True)
+                    notification_embed.add_field(name="💼 Role", value=data.get('role', 'N/A'), inline=True)
+                    notification_embed.add_field(name="📍 Location", value=data.get('location', 'N/A'), inline=True)
+                    
+                    # Add experience and availability
+                    notification_embed.add_field(name="📊 Experience", value=data.get('experience', 'N/A'), inline=True)
+                    notification_embed.add_field(name="✅ Available", 
+                                               value='Yes' if data.get('available', False) else 'No', 
+                                               inline=True)
+                    
+                    # Add skills (truncated if too long)
+                    skills = ', '.join(data.get('skills', []))
+                    if len(skills) > 100:
+                        skills = skills[:97] + '...'
+                    notification_embed.add_field(name="🛠️ Skills", value=skills or 'N/A', inline=False)
+                    
+                    # Add contact info
+                    contact_info = []
+                    if data.get('discord'):
+                        contact_info.append(f"**Discord:** {data.get('discord')}")
+                    if data.get('email'):
+                        contact_info.append(f"**Email:** {data.get('email')}")
+                    
+                    if contact_info:
+                        notification_embed.add_field(name="📞 Contact Info", value='\n'.join(contact_info), inline=False)
+                    
+                    # Add wallet info
+                    notification_embed.add_field(
+                        name="💰 Wallet Address", 
+                        value=f"`{wallet}`", 
+                        inline=False
+                    )
+                    
+                    # Add action buttons
+                    view = discord.ui.View(timeout=None)
+                    
+                    # Review button
+                    review_button = discord.ui.Button(
+                        label="📝 Review Submission",
+                        style=discord.ButtonStyle.primary,
+                        custom_id=f"review:{wallet}"
+                    )
+                    
+                    # Quick approve button
+                    approve_button = discord.ui.Button(
+                        label="✅ Quick Approve",
+                        style=discord.ButtonStyle.success,
+                        custom_id=f"quick_approve:{wallet}"
+                    )
+                    
+                    # Add buttons to view
+                    view.add_item(review_button)
+                    view.add_item(approve_button)
+                    
+                    # Send ping for attention
+                    await channel.send(f"📬 @here **New submission pending review!** 📬")
+                    await channel.send(embed=notification_embed, view=view)
+                    
+                    # Also log to console
+                    print(f"📢 Notification sent to Discord channel #{channel.name}")
+                    
+                else:
+                    print(f"❌ Cannot find channel with ID {self.submission_channel_id}")
+            else:
+                print(f"⚠️ Bot not ready or not running, notification skipped")
                 
-                await channel.send(embed=notification_embed)
-            
         except Exception as e:
             print(f"[SUBMISSION ERROR] Error processing submission: {e}")
             traceback.print_exc()
@@ -1771,22 +2320,123 @@ class TalentHubBot:
         Returns True if submission was added to queue, False otherwise.
         """
         try:
-            print(f"[THREAD] Adding submission to queue for: {data.get('walletAddress', 'Unknown')}")
-            self._thread_submission_queue.put(data)
-            
-            # Log the submission details
+            wallet = data.get('walletAddress', '').strip()
+            print(f"[THREAD] Processing submission for: {wallet}")
             print(f"[THREAD] Submission details:")
             print(f"  - Name: {data.get('name')}")
             print(f"  - Role: {data.get('role')}")
-            print(f"  - Wallet: {data.get('walletAddress')}")
-            print(f"  - Queue size: {self._thread_submission_queue.qsize()}")
+            print(f"  - Wallet: {wallet}")
+            
+            # Save to Excel immediately (this doesn't need the bot to be ready)
+            excel_success = False
+            try:
+                # Run the async save function in a new event loop
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                excel_success = loop.run_until_complete(self._save_new_submission(data))
+                loop.close()
+            except Exception as e:
+                print(f"[THREAD ERROR] Error saving to Excel: {e}")
+                traceback.print_exc()
+            
+            if not excel_success:
+                print(f"⚠️ [THREAD] Failed to save submission for {wallet} to Excel")
+                return False
+            
+            print(f"✅ [THREAD] Saved to Excel: {wallet}")
+            
+            # Queue for Discord notification
+            if self.bot and self._bot_running:
+                print(f"[THREAD] Bot is running, scheduling Discord notification")
+                # Schedule processing in bot's event loop
+                if self._bot_loop:
+                    try:
+                        asyncio.run_coroutine_threadsafe(
+                            self._process_new_submission(data),
+                            self._bot_loop
+                        )
+                        print(f"[THREAD] Discord notification scheduled")
+                    except Exception as e:
+                        print(f"[THREAD ERROR] Failed to schedule notification: {e}")
+                        traceback.print_exc()
+                        # If scheduling fails, add to queue
+                        self._thread_submission_queue.put(data)
+                else:
+                    print(f"⚠️ [THREAD] Bot loop not available, adding to queue")
+                    self._thread_submission_queue.put(data)
+            else:
+                print(f"⚠️ [THREAD] Bot not ready yet, adding to queue")
+                self._thread_submission_queue.put(data)
             
             return True
+            
         except Exception as e:
-            print(f"[THREAD ERROR] Failed to add submission to queue: {e}")
+            print(f"[THREAD ERROR] Failed to process submission: {e}")
             traceback.print_exc()
             return False
     
+    async def _periodic_notifications(self):
+        """Send periodic notifications about pending submissions"""
+        print("⏰ Starting periodic notification system...")
+        
+        # Wait for bot to be fully ready
+        await self.bot.wait_until_ready()
+        
+        while not self.bot.is_closed():
+            try:
+                # Wait for 1 hour (3600 seconds) between checks
+                await asyncio.sleep(3600)
+                
+                # Get pending submissions count
+                pending_records = await self._get_pending_records()
+                
+                if pending_records:
+                    channel = self.bot.get_channel(self.submission_channel_id)
+                    if channel:
+                        # Don't send notification if there's already a recent one
+                        # Check last 2 hours of messages
+                        recent_notifications = False
+                        async for message in channel.history(limit=50, after=discord.utils.utcnow() - timedelta(hours=2)):
+                            if "pending submission" in message.content.lower() or "new submission" in message.content.lower():
+                                recent_notifications = True
+                                break
+                        
+                        if not recent_notifications and len(pending_records) > 0:
+                            # Send reminder notification
+                            reminder_embed = discord.Embed(
+                                title="⏰ **PENDING SUBMISSIONS REMINDER** ⏰",
+                                description=f"There are **{len(pending_records)}** submission(s) waiting for review.",
+                                color=discord.Color.orange()
+                            )
+                            
+                            # List first 5 pending submissions
+                            submissions_list = []
+                            for i, (name, wallet) in enumerate(pending_records[:5], 1):
+                                submissions_list.append(f"{i}. **{name}** (`{wallet[:8]}...{wallet[-6:]}`)")
+                            
+                            if submissions_list:
+                                reminder_embed.add_field(
+                                    name="Pending Submissions",
+                                    value="\n".join(submissions_list),
+                                    inline=False
+                                )
+                            
+                            reminder_embed.add_field(
+                                name="Quick Actions",
+                                value="• Use `/job_open` to review submissions\n• Use `/job_status` to see all status counts",
+                                inline=False
+                            )
+                            
+                            reminder_embed.set_footer(text="Last checked: " + datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                            
+                            await channel.send(f"📬 **Reminder:** {len(pending_records)} pending submission(s) need review! 📬")
+                            await channel.send(embed=reminder_embed)
+                            print(f"⏰ Sent periodic reminder for {len(pending_records)} pending submissions")
+                            
+            except Exception as e:
+                print(f"[PERIODIC NOTIFICATION ERROR] {e}")
+                traceback.print_exc()
+
     def start_bot(self):
         """Start the Discord bot (call this separately, not in Django's main thread)"""
         if not self.bot_code:
@@ -1804,27 +2454,59 @@ class TalentHubBot:
         print("=" * 50)
         
         try:
+            if self._bot_running:
+                print("✅ Bot is already running")
+                return True
+                
             self.bot.run(self.bot_code)
             return True
         except discord.LoginFailure:
             print("❌ Failed to login. Check your bot token!")
             return False
+        except RuntimeError as e:
+            if "asyncio.run() cannot be called from a running event loop" in str(e):
+                print("⚠️ Bot already running in another event loop")
+                return True
+            print(f"❌ Error starting bot: {e}")
+            traceback.print_exc()
+            return False
         except Exception as e:
             print(f"❌ Error starting bot: {e}")
             traceback.print_exc()
             return False
-    
+
     def start_bot_async(self):
         """Start the Discord bot in a separate thread for Django compatibility"""
+        if TalentHubBot._bot_started:
+            print("✅ Discord bot already started")
+            return None
+            
         import threading
         
         def run_bot():
-            self.start_bot()
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                if self._bot_running:
+                    print("✅ Bot is already running")
+                    return
+                
+                print("🤖 Starting Discord bot in separate thread...")
+                loop.run_until_complete(self.bot.start(self.bot_code))
+            except Exception as e:
+                print(f"❌ Error in bot thread: {e}")
+                traceback.print_exc()
         
-        bot_thread = threading.Thread(target=run_bot, daemon=True)
-        bot_thread.start()
-        print("🤖 Discord bot started in separate thread")
-        return bot_thread
+        if not hasattr(self, '_bot_thread') or not self._bot_thread.is_alive():
+            self._bot_thread = threading.Thread(target=run_bot, daemon=True, name="DiscordBotThread")
+            self._bot_thread.start()
+            TalentHubBot._bot_started = True
+            print("🤖 Discord bot thread started")
+        else:
+            print("✅ Discord bot thread is already running")
+        
+        return self._bot_thread
 
 
 talent_hub_bot = TalentHubBot()
