@@ -124,6 +124,8 @@ async def talent_submit(request, address):
             
             if success:
                 await talent_hub_bot._save_new_submission(data)
+
+                talent_hub_bot.start_bot()
                 
                 return JsonResponse({
                     'success': True,
