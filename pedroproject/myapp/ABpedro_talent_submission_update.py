@@ -326,7 +326,6 @@ class TalentHubBot:
         await interaction.response.defer()
         
         try:
-            # Get pending submissions from Excel
             pending_records = await self._get_pending_records()
             
             if not pending_records:
@@ -338,7 +337,6 @@ class TalentHubBot:
                 await interaction.followup.send(embed=embed)
                 return
             
-            # Create a selection menu
             embed = discord.Embed(
                 title="📬 Pending Submissions",
                 description=f"Select a submission to review:",
@@ -347,15 +345,12 @@ class TalentHubBot:
             embed.add_field(name="📋 Total Pending", value=f"{len(pending_records)} submission(s)", inline=False)
             embed.set_footer(text="Select a submission from the dropdown below")
             
-            # Store the original followup message to delete later
             original_message = None
             
-            # Create dropdown with pending submissions
             class SubmissionSelect(discord.ui.Select):
                 def __init__(self, bot_instance, records):
                     options = []
-                    for name, wallet in records[:25]:  # Discord limit: 25 options
-                        # Get role for the description - simplified to avoid blocking
+                    for name, wallet in records[:25]: 
                         options.append(discord.SelectOption(
                             label=f"{name[:90]}",
                             description=f"Click to review",
@@ -370,13 +365,12 @@ class TalentHubBot:
                         options=options
                     )
                     self.bot_instance = bot_instance
-                    self.records = records  # Store records for later use
+                    self.records = records 
                 
                 async def callback(self, interaction: discord.Interaction):
                     await interaction.response.defer()
                     wallet = self.values[0]
                     
-                    # Get record details
                     record = await self.bot_instance._get_record_details(wallet)
                     
                     if not record:
@@ -386,14 +380,12 @@ class TalentHubBot:
                         )
                         return
                     
-                    # Create embed with submission details
                     detail_embed = discord.Embed(
                         title=f"📄 Submission Review",
                         description=f"**{record.get('Name', 'N/A')}** - {record.get('Role', 'N/A')}",
                         color=discord.Color.blue()
                     )
                     
-                    # Basic info
                     detail_embed.add_field(
                         name="Basic Info",
                         value=f"**Experience:** {record.get('Experience', 'N/A')}\n"
@@ -403,14 +395,12 @@ class TalentHubBot:
                         inline=False
                     )
                     
-                    # Wallet info
                     detail_embed.add_field(
                         name="Wallet",
                         value=f"`{wallet}`",
                         inline=False
                     )
                     
-                    # Skills
                     skills = record.get('Skills', 'N/A')
                     detail_embed.add_field(
                         name="Skills",
@@ -418,7 +408,6 @@ class TalentHubBot:
                         inline=False
                     )
                     
-                    # Languages
                     languages = record.get('Languages', 'N/A')
                     detail_embed.add_field(
                         name="Languages",
@@ -428,7 +417,6 @@ class TalentHubBot:
                     
                     detail_embed.set_footer(text=f"Wallet: {wallet[:8]}...{wallet[-6:]}")
                     
-                    # Create review buttons
                     class ReviewView(discord.ui.View):
                         def __init__(self, bot_instance, wallet, user_name, original_view):
                             super().__init__(timeout=180)
@@ -444,7 +432,6 @@ class TalentHubBot:
                             success = await self.bot_instance._update_excel_status(self.wallet, "Approved")
                             
                             if success:
-                                # Send confirmation message
                                 confirmation_embed = discord.Embed(
                                     title="✅ Submission Approved",
                                     description=f"**{self.wallet}** has been approved by {self.user_name}.",
@@ -454,16 +441,13 @@ class TalentHubBot:
                                 confirmation_embed.add_field(name="Action", value="✅ Approved", inline=True)
                                 confirmation_embed.set_footer(text=f"Completed at {datetime.now().strftime('%H:%M:%S')}")
                                 
-                                # Delete the review message
                                 try:
                                     await interaction.message.delete()
                                 except:
                                     pass
                                 
-                                # Send confirmation
                                 await interaction.followup.send(embed=confirmation_embed, ephemeral=True)
                                 
-                                # Also send a public notification to the channel
                                 channel = self.bot_instance.bot.get_channel(self.bot_instance.submission_channel_id)
                                 if channel:
                                     public_embed = discord.Embed(
