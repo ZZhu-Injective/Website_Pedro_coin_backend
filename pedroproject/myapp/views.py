@@ -60,7 +60,6 @@ def start_bot():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         talent_hub_bot.loop = loop
-        loop.run_until_complete(talent_hub_bot.start())
 
     if not hasattr(start_bot, 'bot_started'):
         bot_thread = threading.Thread(target=run_bot, daemon=True)
