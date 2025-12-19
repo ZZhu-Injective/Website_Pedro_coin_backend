@@ -2,7 +2,7 @@ import os
 import asyncio
 import discord
 from discord.ext import commands
-from discord.ui import Button, View, Modal, TextInput
+from discord.ui import Button, View, Select
 from openpyxl import Workbook, load_workbook
 from datetime import datetime
 from typing import Dict, Optional, List, Tuple, Any
@@ -35,8 +35,8 @@ class TalentHubBot:
             max_messages=None
         )
         self.submission_channel_id = 1374018261578027129
-        self.pending_submissions: Dict[str, dict] = {}
-        self.queued_submissions: Dict[str, dict] = {}   
+        self.pending_submissions: Dict[str, dict] = {}  # Submissions waiting for Discord messages
+        self.queued_submissions: Dict[str, dict] = {}   # Submissions waiting for /job_open
         self.pending_updates: Dict[str, dict] = {}
         self.excel_file = "Atalent_submissions.xlsx"
         self.bot_code = os.getenv("DISCORD_BOT")
@@ -318,11 +318,10 @@ class TalentHubBot:
             return None
     
     async def job_open_command(self, interaction: discord.Interaction):
-        """Open queued submissions for review"""
+        """Open queued submissions for review - DROPDOWN VERSION"""
         await interaction.response.defer()
         
         try:
-            # Get queued submissions that haven't been posted to Discord yet
             queued_count = len(self.queued_submissions)
             pending_count = len(self.pending_submissions)
             
@@ -339,34 +338,220 @@ class TalentHubBot:
                 await interaction.followup.send(embed=embed)
                 return
             
+            # Create a selection menu
             embed = discord.Embed(
                 title="📬 Submission Inbox",
-                description=f"Showing {queued_count} queued submission(s) for review.",
+                description=f"Select a submission to view details:",
                 color=discord.Color.blue()
             )
             embed.add_field(name="📥 Queued", value=f"{queued_count} submission(s)", inline=True)
             embed.add_field(name="⏳ Pending Review", value=f"{pending_count} submission(s)", inline=True)
-            embed.set_footer(text="Use buttons below to review each submission")
+            embed.set_footer(text="Select a submission from the dropdown below")
             
-            view = View(timeout=180)
+            # Create dropdown with submissions
+            class SubmissionSelect(discord.ui.Select):
+                def __init__(self, bot_instance, submissions):
+                    options = []
+                    for wallet, data in list(submissions.items())[:25]:  # Discord limit: 25 options
+                        name = data.get('data', {}).get('name', 'Unknown')
+                        role = data.get('data', {}).get('role', 'Unknown')
+                        options.append(discord.SelectOption(
+                            label=f"{name[:90]}",
+                            description=f"{role[:45]}",
+                            value=wallet,
+                            emoji="📄"
+                        ))
+                    
+                    super().__init__(
+                        placeholder="Choose a submission to view...",
+                        min_values=1,
+                        max_values=1,
+                        options=options
+                    )
+                    self.bot_instance = bot_instance
+                
+                async def callback(self, interaction: discord.Interaction):
+                    await interaction.response.defer()
+                    wallet = self.values[0]
+                    
+                    if wallet in self.bot_instance.queued_submissions:
+                        data = self.bot_instance.queued_submissions[wallet].get('data', {})
+                        
+                        # Create embed with submission details
+                        detail_embed = discord.Embed(
+                            title=f"📄 Submission Details",
+                            description=f"**{data.get('name', 'N/A')}** - {data.get('role', 'N/A')}",
+                            color=discord.Color.blue()
+                        )
+                        
+                        # Basic info
+                        detail_embed.add_field(
+                            name="Basic Info",
+                            value=f"**Experience:** {data.get('experience', 'N/A')}\n"
+                                  f"**Education:** {data.get('education', 'N/A')}\n"
+                                  f"**Location:** {data.get('location', 'N/A')}\n"
+                                  f"**Available:** {'✅ Yes' if data.get('available') else '❌ No'}",
+                            inline=False
+                        )
+                        
+                        # Wallet info
+                        detail_embed.add_field(
+                            name="Wallet",
+                            value=f"`{wallet}`",
+                            inline=False
+                        )
+                        
+                        # Skills
+                        skills = "• " + "\n• ".join(data.get('skills', [])) if data.get('skills') else "None specified"
+                        detail_embed.add_field(
+                            name="Skills",
+                            value=skills[:500] + "..." if len(skills) > 500 else skills,
+                            inline=False
+                        )
+                        
+                        # Languages
+                        languages = "• " + "\n• ".join(data.get('languages', [])) if data.get('languages') else "None specified"
+                        detail_embed.add_field(
+                            name="Languages",
+                            value=languages[:200] + "..." if len(languages) > 200 else languages,
+                            inline=False
+                        )
+                        
+                        detail_embed.set_footer(text=f"Wallet: {wallet[:8]}...{wallet[-6:]}")
+                        
+                        # Create action buttons
+                        class ActionView(discord.ui.View):
+                            def __init__(self, bot_instance, wallet):
+                                super().__init__(timeout=180)
+                                self.bot_instance = bot_instance
+                                self.wallet = wallet
+                            
+                            @discord.ui.button(label="Post for Review", style=discord.ButtonStyle.primary, emoji="📤", row=0)
+                            async def post_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                                await interaction.response.defer()
+                                # Post to channel
+                                message = await self.bot_instance._post_submission_to_channel(self.wallet)
+                                if message:
+                                    await interaction.followup.send(
+                                        f"✅ Submission posted to review channel!",
+                                        ephemeral=True
+                                    )
+                                else:
+                                    await interaction.followup.send(
+                                        f"❌ Failed to post submission",
+                                        ephemeral=True
+                                    )
+                            
+                            @discord.ui.button(label="View Full Details", style=discord.ButtonStyle.secondary, emoji="👁️", row=0)
+                            async def view_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                                await interaction.response.defer()
+                                
+                                if self.wallet in self.bot_instance.queued_submissions:
+                                    data = self.bot_instance.queued_submissions[self.wallet].get('data', {})
+                                    
+                                    # Create a more detailed embed
+                                    full_embed = discord.Embed(
+                                        title=f"📋 Full Submission Details",
+                                        description=f"**{data.get('name', 'N/A')}**",
+                                        color=discord.Color.green()
+                                    )
+                                    
+                                    # Basic information
+                                    full_embed.add_field(
+                                        name="Professional Info",
+                                        value=f"**Role:** {data.get('role', 'N/A')}\n"
+                                              f"**Injective Role:** {data.get('injectiveRole', 'N/A')}\n"
+                                              f"**Experience:** {data.get('experience', 'N/A')}\n"
+                                              f"**Education:** {data.get('education', 'N/A')}\n"
+                                              f"**Location:** {data.get('location', 'N/A')}\n"
+                                              f"**Monthly Rate:** {data.get('monthlyRate', 'N/A')}\n"
+                                              f"**Available:** {'✅ Yes' if data.get('available') else '❌ No'}",
+                                        inline=False
+                                    )
+                                    
+                                    # Contact info
+                                    contact_info = [
+                                        f"**Discord:** {data.get('discord', '-')}",
+                                        f"**Email:** {data.get('email', '-')}",
+                                        f"**Phone:** {data.get('phone', '-')}",
+                                        f"**Telegram:** {data.get('telegram', '-')}",
+                                        f"**X/Twitter:** {data.get('X', '-')}",
+                                        f"**GitHub:** {data.get('github', '-')}"
+                                    ]
+                                    full_embed.add_field(
+                                        name="Contact Information",
+                                        value="\n".join(contact_info),
+                                        inline=False
+                                    )
+                                    
+                                    # Wallet info
+                                    full_embed.add_field(
+                                        name="Wallet Information",
+                                        value=f"**Address:** `{self.wallet}`\n"
+                                              f"**Type:** {data.get('walletType', 'N/A')}\n"
+                                              f"**NFT Holdings:** {data.get('nftHold', 'N/A')}\n"
+                                              f"**Token Holdings:** {data.get('tokenHold', 'N/A')}",
+                                        inline=False
+                                    )
+                                    
+                                    # Links
+                                    links = []
+                                    if data.get('portfolio'):
+                                        links.append(f"**Portfolio:** [Link]({data['portfolio']})")
+                                    if data.get('cv'):
+                                        links.append(f"**CV/Resume:** [Download]({data['cv']})")
+                                    if data.get('profilePicture'):
+                                        links.append(f"**Profile Picture:** [View]({data['profilePicture']})")
+                                    
+                                    if links:
+                                        full_embed.add_field(
+                                            name="Links",
+                                            value="\n".join(links),
+                                            inline=False
+                                        )
+                                    
+                                    # Bio
+                                    bio = data.get('bio', 'No bio provided')
+                                    full_embed.add_field(
+                                        name="Bio",
+                                        value=f"{bio[:1000]}{'...' if len(bio) > 1000 else ''}",
+                                        inline=False
+                                    )
+                                    
+                                    full_embed.set_footer(text=f"Wallet: {self.wallet[:8]}...{self.wallet[-6:]}")
+                                    
+                                    await interaction.followup.send(embed=full_embed, ephemeral=True)
+                                else:
+                                    await interaction.followup.send(
+                                        f"❌ Submission not found or already processed.",
+                                        ephemeral=True
+                                    )
+                            
+                            @discord.ui.button(label="Close", style=discord.ButtonStyle.danger, emoji="❌", row=1)
+                            async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                                await interaction.response.defer()
+                                await interaction.message.delete()
+                                await interaction.followup.send("✅ View closed.", ephemeral=True)
+                        
+                        await interaction.followup.send(embed=detail_embed, view=ActionView(self.bot_instance, wallet), ephemeral=True)
+                    else:
+                        await interaction.followup.send(
+                            f"❌ Submission not found or already processed.",
+                            ephemeral=True
+                        )
             
-            for wallet, data in list(self.queued_submissions.items())[:5]:  # Show max 5 at once
-                btn_label = f"Review: {data.get('data', {}).get('name', 'Unknown')}"
-                button = Button(
-                    label=btn_label[:80],
-                    style=discord.ButtonStyle.primary,
-                    custom_id=f"open:review:{wallet}"
-                )
-                view.add_item(button)
+            class SubmissionView(discord.ui.View):
+                def __init__(self, bot_instance, submissions):
+                    super().__init__(timeout=180)
+                    self.add_item(SubmissionSelect(bot_instance, submissions))
+                
+                @discord.ui.button(label="Close Inbox", style=discord.ButtonStyle.secondary, row=1)
+                async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                    await interaction.response.defer()
+                    await interaction.message.delete()
+                    await interaction.followup.send("✅ Inbox closed.", ephemeral=True)
             
-            # Add close button
-            close_button = Button(
-                label="Close Inbox",
-                style=discord.ButtonStyle.secondary,
-                custom_id="open:close"
-            )
-            view.add_item(close_button)
-            
+            view = SubmissionView(self, self.queued_submissions)
             await interaction.followup.send(embed=embed, view=view)
             
         except Exception as e:
@@ -398,32 +583,28 @@ class TalentHubBot:
             
             embed = discord.Embed(
                 title="📬 Submission Inbox",
-                description=f"Showing {queued_count} queued submission(s) for review.",
+                description=f"Select a submission to view details:",
                 color=discord.Color.blue()
             )
             embed.add_field(name="📥 Queued", value=f"{queued_count} submission(s)", inline=True)
             embed.add_field(name="⏳ Pending Review", value=f"{pending_count} submission(s)", inline=True)
-            embed.set_footer(text="Use buttons below to review each submission")
+            embed.set_footer(text="Use the slash command /job_open for interactive selection")
             
-            view = View(timeout=180)
+            # For prefix command, just list them
+            submissions_list = []
+            for i, (wallet, data) in enumerate(list(self.queued_submissions.items())[:10], 1):
+                name = data.get('data', {}).get('name', 'Unknown')
+                role = data.get('data', {}).get('role', 'Unknown')
+                submissions_list.append(f"**{i}. {name}** - {role}\n   `{wallet}`")
             
-            for wallet, data in list(self.queued_submissions.items())[:5]:
-                btn_label = f"Review: {data.get('data', {}).get('name', 'Unknown')}"
-                button = Button(
-                    label=btn_label[:80],
-                    style=discord.ButtonStyle.primary,
-                    custom_id=f"open:review:{wallet}"
+            if submissions_list:
+                embed.add_field(
+                    name="Queued Submissions",
+                    value="\n\n".join(submissions_list),
+                    inline=False
                 )
-                view.add_item(button)
             
-            close_button = Button(
-                label="Close Inbox",
-                style=discord.ButtonStyle.secondary,
-                custom_id="open:close"
-            )
-            view.add_item(close_button)
-            
-            await ctx.send(embed=embed, view=view)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             print(f"❌ Error in job_open prefix command: {e}")
@@ -516,7 +697,7 @@ class TalentHubBot:
                         inline=False
                     )
             
-            embed.set_footer(text="Use !job_open to review queued submissions")
+            embed.set_footer(text="Use /job_open to review queued submissions")
             
             await ctx.send(embed=embed)
             
@@ -1158,7 +1339,7 @@ class TalentHubBot:
                 data.get('profilePicture', '').strip(),
                 data.get('bio', '').strip(),
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                "Queued"  # Changed from "Pending"
+                "Queued"
             ]
             
             wb = load_workbook(self.excel_file)
@@ -1204,7 +1385,7 @@ class TalentHubBot:
             ws[f'W{row}'] = data.get('profilePicture', '').strip()
             ws[f'X{row}'] = data.get('bio', '').strip()
             ws[f'Y{row}'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            ws[f'Z{row}'] = "Queued"  # Changed from "Pending"
+            ws[f'Z{row}'] = "Queued"
             
             wb.save(self.excel_file)
             wb.close()
@@ -1255,7 +1436,7 @@ class TalentHubBot:
             traceback.print_exc()
     
     async def _process_submission_queue(self):
-        """Process submissions from the thread-safe queue - MODIFIED: Only add to queued_submissions"""
+        """Process submissions from the thread-safe queue"""
         print("🔄 Submission queue processor started")
         while True:
             try:
@@ -1517,7 +1698,6 @@ class TalentHubBot:
             
         try:
             custom_id = interaction.data.get('custom_id', '')
-            print(f"[INTERACTION] Received interaction with custom_id: {custom_id}")
             
             if ':' not in custom_id:
                 return
@@ -1527,24 +1707,25 @@ class TalentHubBot:
             if len(parts) == 3:
                 action_type, action, wallet = parts
                 
+                # Debug logging
+                print(f"[INTERACTION] Type: {action_type}, Action: {action}, Wallet: {wallet}")
+                
                 # Respond immediately to avoid timeout
                 if not interaction.response.is_done():
                     await interaction.response.defer(ephemeral=True)
                 
-                print(f"[INTERACTION] Parsed - Type: {action_type}, Action: {action}, Wallet: {wallet}")
-                
                 if action_type == "submission":
+                    print(f"[INTERACTION] Routing to submission handler")
                     asyncio.create_task(self._handle_submission_interaction(interaction, action, wallet))
-                elif action_type == "open":
-                    asyncio.create_task(self._handle_open_interaction(interaction, action, wallet))
                 else:
+                    print(f"[INTERACTION WARNING] Unknown action type: {action_type}")
                     if not interaction.response.is_done():
                         await interaction.response.send_message(
                             f"❌ Unknown action type: {action_type}",
                             ephemeral=True
                         )
             else:
-                print(f"[INTERACTION] Invalid parts count: {len(parts)}")
+                print(f"[INTERACTION ERROR] Invalid parts count: {len(parts)}")
                 if not interaction.response.is_done():
                     await interaction.response.send_message(
                         "❌ Invalid interaction format!",
@@ -1562,54 +1743,6 @@ class TalentHubBot:
                     )
             except:
                 pass
-    
-    async def _handle_open_interaction(self, interaction: discord.Interaction, action: str, wallet: str):
-        """Handle job_open button interactions"""
-        print(f"[OPEN INTERACTION] Processing {action} for wallet: {wallet}")
-        
-        try:
-            if action == "review":
-                # Post this specific submission to channel
-                message = await self._post_submission_to_channel(wallet)
-                
-                if message:
-                    await interaction.followup.send(
-                        f"✅ Submission for wallet `{wallet}` has been posted for review!",
-                        ephemeral=True
-                    )
-                    
-                    # Update the original job_open message
-                    try:
-                        original_embed = interaction.message.embeds[0]
-                        updated_embed = discord.Embed(
-                            title="📭 Submission Inbox",
-                            description=f"Submission for `{wallet}` has been moved to review channel.",
-                            color=discord.Color.green()
-                        )
-                        updated_embed.add_field(name="📥 Queued", value=f"{len(self.queued_submissions)} submission(s)", inline=True)
-                        updated_embed.add_field(name="⏳ Pending Review", value=f"{len(self.pending_submissions)} submission(s)", inline=True)
-                        updated_embed.set_footer(text="Use /job_open again to review more submissions")
-                        
-                        await interaction.message.edit(embed=updated_embed, view=None)
-                    except:
-                        pass
-                else:
-                    await interaction.followup.send(
-                        f"❌ Failed to post submission for wallet `{wallet}`",
-                        ephemeral=True
-                    )
-                    
-            elif action == "close":
-                await interaction.message.edit(content="Inbox closed.", embed=None, view=None)
-                await interaction.followup.send("✅ Inbox closed.", ephemeral=True)
-                
-        except Exception as e:
-            print(f"[OPEN INTERACTION ERROR] Error: {e}")
-            traceback.print_exc()
-            await interaction.followup.send(
-                "❌ An error occurred while processing your request!",
-                ephemeral=True
-            )
     
     async def _handle_submission_interaction(self, interaction: discord.Interaction, action: str, wallet: str):
         """Handle submission button interactions"""
@@ -1779,11 +1912,13 @@ class TalentHubBot:
             
         print("🤖 Starting Talent Hub Bot...")
         print("=" * 50)
-        print("NEW WORKFLOW:")
+        print("NEW WORKFLOW WITH DROPDOWN MENU:")
         print("1. Submissions go to queued list")
-        print("2. Use /job_open to review queued submissions")
-        print("3. Click 'Review' button to post submission to channel")
-        print("4. Use approve/reject/close buttons on posted submissions")
+        print("2. Bot sends notification when new submission arrives")
+        print("3. Use /job_open to see queued submissions in dropdown")
+        print("4. Select submission from dropdown to view details")
+        print("5. Click 'Post for Review' to post to channel")
+        print("6. Use approve/reject/close buttons on posted submissions")
         print("=" * 50)
         
         try:
