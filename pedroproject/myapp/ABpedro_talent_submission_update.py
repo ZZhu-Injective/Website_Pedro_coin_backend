@@ -131,25 +131,8 @@ class TalentHubBot:
             synced = await self.bot.tree.sync()
             print(f"✅ Synced {len(synced)} command(s)")
             
-            counts = await self._get_status_counts()
-            
-            if channel:
-                notification = f"🤖 **Talent Hub Bot is ready!**\n"
-                notification += f"📊 **Status:** {counts['Pending']} pending, {counts['Approved']} approved, {counts['Rejected']} rejected\n"
-                notification += f"💡 Use `/job_open` to review pending submissions"
-                
-                ready_embed = discord.Embed(
-                    title="🤖 Talent Hub Bot Online",
-                    description=notification,
-                    color=discord.Color.green()
-                )
-                ready_embed.set_footer(text="Ready to receive new submissions!")
-                await channel.send(embed=ready_embed)
-            
-            # Start processing queued submissions
             asyncio.create_task(self._process_queued_submissions())
             
-            # Start periodic notifications
             asyncio.create_task(self._periodic_notifications())
             
         except Exception as e:
@@ -160,7 +143,6 @@ class TalentHubBot:
         """Process any submissions that were queued before bot was ready"""
         print("🔄 Processing queued submissions...")
         
-        # Wait a moment for everything to stabilize
         await asyncio.sleep(5)
         
         try:
@@ -2110,26 +2092,51 @@ class TalentHubBot:
             return False
     
     async def _test_excel_access(self):
-        """Test if we can read/write to Excel file"""
+        """Test if we can read/write to Excel file without modifying it"""
         try:
-            # Test reading
+            # First, check if file exists
+            if not os.path.exists(self.excel_file):
+                print(f"❌ Excel file not found: {self.excel_file}")
+                return False
+            
+            # 1. Test reading without modifying
             wb = load_workbook(self.excel_file, read_only=True)
             ws = wb.active
-            print(f"📊 Excel file has {ws.max_row} rows")
+            row_count = ws.max_row
+            col_count = ws.max_column
+            print(f"📊 Excel file has {row_count} rows and {col_count} columns")
+            
+            # Show actual headers for debugging
+            if row_count > 0:
+                headers = []
+                for col in range(1, min(col_count + 1, 30)):  # Check first 30 columns
+                    cell = ws.cell(row=1, column=col)
+                    headers.append(str(cell.value) if cell.value else "")
+                print(f"📋 Headers (first {len(headers)}): {headers}")
             wb.close()
             
-            # Test writing
-            wb = load_workbook(self.excel_file)
+            # 2. Test writing by creating a backup, not modifying original
+            backup_file = f"{self.excel_file}.backup_test"
+            wb = load_workbook(self.excel_file)  # Load with write access
             ws = wb.active
-            # Add a test cell
-            ws['AA1'] = 'Test Write'
-            wb.save(self.excel_file)
+            
+            # Count rows and columns again
+            print(f"📊 Loaded with write access: {ws.max_row} rows, {ws.max_column} columns")
+            
+            # Save to backup to test write capability
+            wb.save(backup_file)
             wb.close()
+            
+            # Remove the backup file
+            if os.path.exists(backup_file):
+                os.remove(backup_file)
             
             print("✅ Excel file is accessible for reading and writing")
             return True
+            
         except Exception as e:
             print(f"❌ Excel access error: {e}")
+            traceback.print_exc()
             return False
     
     async def _process_new_submission(self, data: dict):
