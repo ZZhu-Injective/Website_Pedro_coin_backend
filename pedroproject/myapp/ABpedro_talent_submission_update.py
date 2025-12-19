@@ -1366,7 +1366,7 @@ class TalentHubBot:
             await ctx.send("An error occurred while fetching pending submissions.")
     
     async def job_status_command(self, interaction: discord.Interaction):
-        """Show current submission status - how many approved, rejected, and pending"""
+        """Show current submission status, how many approved, rejected, and pending"""
         await interaction.response.defer(ephemeral=True)
         
         try:
@@ -1726,7 +1726,7 @@ class TalentHubBot:
             await processing_msg.edit(content="Failed to update the field. Please check the inputs and try again.")
     
     async def remove_command(self, interaction: discord.Interaction, wallet_address: str):
-        """Remove a submission from the Excel file"""
+        """Remove a submission from the Database"""
         await interaction.response.defer()
         
         row = await self._find_submission_row(wallet_address)
