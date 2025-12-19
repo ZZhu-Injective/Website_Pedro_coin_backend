@@ -37,7 +37,6 @@ class TalentHubBot:
         self.submission_channel_id = 1374018261578027129
         self.pending_submissions: Dict[str, dict] = {}  # Submissions waiting for Discord messages
         self.queued_submissions: Dict[str, dict] = {}   # Submissions waiting for /job_open
-        self.pending_updates: Dict[str, dict] = {}
         self.excel_file = "Atalent_submissions.xlsx"
         self.bot_code = os.getenv("DISCORD_BOT")
         
@@ -62,6 +61,8 @@ class TalentHubBot:
         self.bot.tree.command(name="job_remove")(self.remove_command)
         self.bot.tree.command(name="job_variable")(self.column_names_command)
         self.bot.tree.command(name="job_status")(self.job_status_command)
+        self.bot.tree.command(name="job_test_status")(self.job_test_status_command)
+        self.bot.tree.command(name="job_force_status")(self.job_force_status_command)
         
         @self.bot.command(name="job_open")
         async def job_open_prefix(ctx):
@@ -317,6 +318,60 @@ class TalentHubBot:
             print(f"❌ Error getting record details: {e}")
             return None
     
+    async def _update_excel_status(self, wallet_address: str, new_status: str) -> bool:
+        """Update the status column in Excel for a specific wallet"""
+        try:
+            # First, find the row for this wallet
+            row = await self._find_submission_row(wallet_address)
+            if not row:
+                print(f"[EXCEL ERROR] No row found for wallet: {wallet_address}")
+                
+                # Try to find it case-insensitively
+                print(f"[EXCEL DEBUG] Searching all rows for wallet...")
+                wb = load_workbook(self.excel_file, read_only=True)
+                ws = wb.active
+                
+                for r in range(2, ws.max_row + 1):
+                    cell_value = ws[f'Q{r}'].value
+                    if cell_value:
+                        if str(cell_value).strip().lower() == wallet_address.strip().lower():
+                            print(f"[EXCEL DEBUG] Found match at row {r}!")
+                            row = r
+                            break
+                
+                wb.close()
+                
+                if not row:
+                    print(f"[EXCEL ERROR] Really couldn't find wallet {wallet_address} in Excel")
+                    return False
+            
+            print(f"[EXCEL DEBUG] Found wallet {wallet_address} at row {row}")
+            
+            # Now update the status
+            wb = load_workbook(self.excel_file)
+            ws = wb.active
+            
+            # Check current status
+            current_status = ws[f'Z{row}'].value
+            print(f"[EXCEL DEBUG] Current status at Z{row}: '{current_status}'")
+            print(f"[EXCEL DEBUG] Changing to: '{new_status}'")
+            
+            # Update the status
+            ws[f'Z{row}'] = new_status
+            
+            # Save the file
+            wb.save(self.excel_file)
+            wb.close()
+            
+            print(f"[EXCEL SUCCESS] Updated {wallet_address} status from '{current_status}' to '{new_status}'")
+            
+            return True
+            
+        except Exception as e:
+            print(f"[EXCEL ERROR] Error updating Excel status: {e}")
+            traceback.print_exc()
+            return False
+    
     async def job_open_command(self, interaction: discord.Interaction):
         """Open queued submissions for review - DROPDOWN VERSION"""
         await interaction.response.defer()
@@ -352,7 +407,7 @@ class TalentHubBot:
             class SubmissionSelect(discord.ui.Select):
                 def __init__(self, bot_instance, submissions):
                     options = []
-                    for wallet, data in list(submissions.items())[:25]:  # Discord limit: 25 options
+                    for wallet, data in list(submissions.items())[:25]:
                         name = data.get('data', {}).get('name', 'Unknown')
                         role = data.get('data', {}).get('role', 'Unknown')
                         options.append(discord.SelectOption(
@@ -429,12 +484,20 @@ class TalentHubBot:
                             @discord.ui.button(label="Post for Review", style=discord.ButtonStyle.primary, emoji="📤", row=0)
                             async def post_button(self, interaction: discord.Interaction, button: discord.ui.Button):
                                 await interaction.response.defer()
+                                
                                 # Post to channel
-                                message = await self.bot_instance._post_submission_to_channel(self.wallet)
-                                if message:
+                                success = await self.bot_instance._post_submission_to_channel(self.wallet)
+                                if success:
                                     await interaction.followup.send(
                                         f"✅ Submission posted to review channel!",
                                         ephemeral=True
+                                    )
+                                    
+                                    # Update original message to show it's been posted
+                                    await interaction.message.edit(
+                                        content=f"**✅ This submission has been posted to the review channel!**",
+                                        embed=None,
+                                        view=None
                                     )
                                 else:
                                     await interaction.followup.send(
@@ -704,6 +767,51 @@ class TalentHubBot:
         except Exception as e:
             print(f"❌ Error in job_status prefix command: {e}")
             await ctx.send("An error occurred while fetching status.")
+    
+    async def job_test_status_command(self, interaction: discord.Interaction, wallet_address: str):
+        """Test command to check Excel status"""
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            wb = load_workbook(self.excel_file, read_only=True)
+            ws = wb.active
+            
+            row = await self._find_submission_row(wallet_address)
+            if row:
+                current_status = ws[f'Z{row}'].value
+                name = ws[f'A{row}'].value
+                await interaction.followup.send(
+                    f"✅ Found '{name}' at row {row}. Current status: **'{current_status}'**",
+                    ephemeral=True
+                )
+            else:
+                await interaction.followup.send(
+                    f"❌ No record found for wallet: {wallet_address}",
+                    ephemeral=True
+                )
+            
+            wb.close()
+            
+        except Exception as e:
+            print(f"❌ Error in test_status command: {e}")
+            await interaction.followup.send(f"Error: {e}", ephemeral=True)
+    
+    async def job_force_status_command(self, interaction: discord.Interaction, wallet_address: str, new_status: str):
+        """Force update Excel status for a wallet"""
+        await interaction.response.defer(ephemeral=True)
+        
+        success = await self._update_excel_status(wallet_address, new_status)
+        
+        if success:
+            await interaction.followup.send(
+                f"✅ Forced status update for {wallet_address} to '{new_status}'",
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                f"❌ Failed to update status for {wallet_address}",
+                ephemeral=True
+            )
     
     async def column_names_command(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -1304,7 +1412,7 @@ class TalentHubBot:
     async def _save_new_submission(self, data: dict) -> bool:
         """Save a new submission to Excel"""
         try:
-            wallet = data.get('walletAddress', '')
+            wallet = data.get('walletAddress', '').strip()
             
             print(f"[EXCEL SAVE] Saving submission for wallet: {wallet}")
             
@@ -1403,6 +1511,9 @@ class TalentHubBot:
         print(f'✅ Bot ID: {self.bot.user.id}')
         print(f'✅ Submission channel ID: {self.submission_channel_id}')
         
+        # Test Excel access
+        await self._test_excel_access()
+        
         channel = self.bot.get_channel(self.submission_channel_id)
         if channel:
             print(f'✅ Found submission channel: #{channel.name} ({channel.id})')
@@ -1425,6 +1536,9 @@ class TalentHubBot:
             asyncio.create_task(self._process_submission_queue())
             print("✅ Started submission queue processor")
             
+            # Clean up any orphaned submissions
+            await self.cleanup_orphaned_submissions()
+            
             # Send a notification that bot is ready and has queued submissions
             if self.queued_submissions:
                 notification = f"📬 Talent Hub Bot is ready! There are **{len(self.queued_submissions)}** submission(s) waiting for review. Use `/job_open` to review them."
@@ -1434,6 +1548,29 @@ class TalentHubBot:
         except Exception as e:
             print(f"❌ Error syncing commands: {e}")
             traceback.print_exc()
+    
+    async def _test_excel_access(self):
+        """Test if we can read/write to Excel file"""
+        try:
+            # Test reading
+            wb = load_workbook(self.excel_file, read_only=True)
+            ws = wb.active
+            print(f"📊 Excel file has {ws.max_row} rows")
+            wb.close()
+            
+            # Test writing
+            wb = load_workbook(self.excel_file)
+            ws = wb.active
+            # Add a test cell
+            ws['AA1'] = 'Test Write'
+            wb.save(self.excel_file)
+            wb.close()
+            
+            print("✅ Excel file is accessible for reading and writing")
+            return True
+        except Exception as e:
+            print(f"❌ Excel access error: {e}")
+            return False
     
     async def _process_submission_queue(self):
         """Process submissions from the thread-safe queue"""
@@ -1518,31 +1655,51 @@ class TalentHubBot:
             print(f"[QUEUE ERROR] Error adding to queued submissions: {e}")
             traceback.print_exc()
     
-    async def _post_submission_to_channel(self, wallet: str) -> Optional[discord.Message]:
+    async def _post_submission_to_channel(self, wallet: str) -> bool:
         """Post a specific queued submission to the channel for review"""
         try:
             if wallet not in self.queued_submissions:
                 print(f"[POST ERROR] Wallet {wallet} not in queued submissions")
-                return None
+                
+                # Try case-insensitive search
+                found_wallet = None
+                for key in self.queued_submissions.keys():
+                    if key.lower() == wallet.lower():
+                        found_wallet = key
+                        break
+                
+                if not found_wallet:
+                    print(f"[POST ERROR] Could not find wallet {wallet} in queued submissions")
+                    return False
+                    
+                wallet = found_wallet
             
             submission = self.queued_submissions[wallet]
             data = submission.get('data', {})
             
+            # Make sure we have the exact wallet address from data
+            exact_wallet = data.get('walletAddress', '').strip()
+            if exact_wallet and exact_wallet.lower() != wallet.lower():
+                print(f"[POST WARNING] Wallet mismatch. Using: '{exact_wallet}' instead of '{wallet}'")
+                wallet = exact_wallet
+            
+            print(f"[POST DEBUG] Processing submission for wallet: '{wallet}'")
+            
             channel = self.bot.get_channel(self.submission_channel_id)
             if not channel:
                 print(f"[POST ERROR] Submission channel {self.submission_channel_id} not found!")
-                return None
+                return False
                 
             bot_member = channel.guild.me
             permissions = channel.permissions_for(bot_member)
             
             if not permissions.send_messages:
                 print("[POST ERROR] Bot doesn't have permission to send messages in this channel!")
-                return None
+                return False
             
             if not permissions.embed_links:
                 print("[POST ERROR] Bot doesn't have permission to embed links in this channel!")
-                return None
+                return False
             
             # Update status to Pending
             submission['status'] = "Pending"
@@ -1557,10 +1714,18 @@ class TalentHubBot:
             # Move from queued to pending
             async with self._lock:
                 self.pending_submissions[wallet] = submission
-                del self.queued_submissions[wallet]
+                if wallet in self.queued_submissions:
+                    del self.queued_submissions[wallet]
+                else:
+                    # Try to find and remove by case-insensitive match
+                    for key in list(self.queued_submissions.keys()):
+                        if key.lower() == wallet.lower():
+                            del self.queued_submissions[key]
+                            break
             
             # Update Excel status from "Queued" to "Pending"
-            await self._update_excel_status(wallet, "Pending")
+            update_success = await self._update_excel_status(wallet, "Pending")
+            print(f"[POST] Excel update result for Pending status: {update_success}")
             
             print(f"✅ [POST SUCCESS] Posted submission for {wallet}, message ID: {message.id}")
             print(f"   Name: {data.get('name')}")
@@ -1568,15 +1733,16 @@ class TalentHubBot:
             print(f"   Queued left: {len(self.queued_submissions)}")
             print(f"   Pending now: {len(self.pending_submissions)}")
             
-            return message
+            return True
                 
         except KeyError as e:
             print(f"[POST ERROR] Missing key in data: {e}")
-            return None
+            traceback.print_exc()
+            return False
         except Exception as e:
             print(f"[POST ERROR] Unexpected error: {type(e).__name__}: {e}")
             traceback.print_exc()
-            return None
+            return False
     
     def _create_submission_embed(self, data: dict) -> discord.Embed:
         """Create a Discord embed for a submission"""
@@ -1753,17 +1919,21 @@ class TalentHubBot:
             submission = None
             submission_key = None
             
-            for key, pending_data in list(self.pending_submissions.items()):
-                if (key == wallet or 
-                    key.lower() == wallet.lower() or
-                    pending_data.get('data', {}).get('walletAddress', '').strip() == wallet or
-                    pending_data.get('data', {}).get('walletAddress', '').strip().lower() == wallet.lower() or
-                    pending_data.get('message_id') == interaction.message.id):
-                    
-                    submission = pending_data
-                    submission_key = key
-                    print(f"[INTERACTION] Found submission with key: {key}")
-                    break
+            # First check exact wallet match
+            if wallet in self.pending_submissions:
+                submission = self.pending_submissions[wallet]
+                submission_key = wallet
+            else:
+                # Check with case-insensitive comparison
+                for key, pending_data in list(self.pending_submissions.items()):
+                    if (key.lower() == wallet.lower() or
+                        pending_data.get('data', {}).get('walletAddress', '').strip().lower() == wallet.lower() or
+                        pending_data.get('message_id') == interaction.message.id):
+                        
+                        submission = pending_data
+                        submission_key = key
+                        print(f"[INTERACTION] Found submission with key: {key}")
+                        break
             
             if not submission:
                 print(f"[INTERACTION] No submission found for wallet: {wallet}")
@@ -1774,6 +1944,7 @@ class TalentHubBot:
                 return
             
             # Process the action
+            success = False
             if action == "approve":
                 submission['status'] = "Approved"
                 success = await self._update_excel_status(submission_key, "Approved")
@@ -1825,18 +1996,58 @@ class TalentHubBot:
                 )
                 return
             
-            # Update the Discord message - remove buttons
+            # Update the Discord message - remove buttons and update embed
             try:
+                # Update the embed with new status
                 embed = self._create_submission_embed(submission)
-                await interaction.message.edit(embed=embed, view=None)
-                print(f"[INTERACTION] Updated message with new status: {submission['status']}")
+                
+                # Try to edit the original message
+                try:
+                    await interaction.message.edit(embed=embed, view=None)
+                    print(f"[INTERACTION] Updated message with new status: {submission['status']}")
+                except discord.NotFound:
+                    print(f"[INTERACTION] Original message not found, it might have been deleted")
+                
+                # Also try to delete the message if action is reject or close
+                if action in ["reject", "close"]:
+                    try:
+                        await interaction.message.delete()
+                        print(f"[INTERACTION] Deleted message after {action}")
+                    except:
+                        pass  # Message might already be deleted
+                
             except Exception as e:
                 print(f"[INTERACTION] Error updating message: {e}")
+                traceback.print_exc()
             
-            # Remove from pending submissions
-            if submission_key in self.pending_submissions:
+            # ALWAYS remove from pending submissions after processing
+            if submission_key and submission_key in self.pending_submissions:
                 del self.pending_submissions[submission_key]
                 print(f"[INTERACTION] Removed {submission_key} from pending submissions")
+                print(f"[INTERACTION] Pending submissions count: {len(self.pending_submissions)}")
+                
+            # Also remove from queued submissions if somehow still there
+            if submission_key and submission_key in self.queued_submissions:
+                del self.queued_submissions[submission_key]
+                print(f"[INTERACTION] Removed {submission_key} from queued submissions")
+            
+            # Send a status update to the channel
+            try:
+                channel = self.bot.get_channel(self.submission_channel_id)
+                if channel:
+                    status_embed = discord.Embed(
+                        title=f"Submission {action.capitalize()}d",
+                        description=f"Submission from **{submission.get('data', {}).get('name', 'Unknown')}** has been **{action}d**.",
+                        color=discord.Color.green() if action == "approve" else discord.Color.red()
+                    )
+                    status_embed.add_field(name="Wallet", value=f"`{submission_key}`", inline=False)
+                    status_embed.add_field(name="Action", value=f"**{action.upper()}**", inline=True)
+                    status_embed.add_field(name="By", value=interaction.user.mention, inline=True)
+                    status_embed.set_footer(text=f"Status updated in Excel to: {submission['status']}")
+                    
+                    await channel.send(embed=status_embed)
+            except Exception as e:
+                print(f"[INTERACTION] Error sending status update: {e}")
                 
         except Exception as e:
             print(f"[INTERACTION BACKGROUND ERROR] Error in background processing: {e}")
@@ -1849,30 +2060,38 @@ class TalentHubBot:
             except:
                 pass
     
-    async def _update_excel_status(self, wallet_address: str, new_status: str) -> bool:
-        """Update the status column in Excel for a specific wallet"""
+    async def cleanup_orphaned_submissions(self):
+        """Clean up submissions that are in pending but no longer have messages"""
         try:
-            wb = load_workbook(self.excel_file)
-            ws = wb.active
+            channel = self.bot.get_channel(self.submission_channel_id)
+            if not channel:
+                return
             
-            row = await self._find_submission_row(wallet_address)
-            if not row:
-                print(f"[EXCEL] No row found for wallet: {wallet_address}")
-                wb.close()
-                return False
+            pending_to_remove = []
             
-            print(f"[EXCEL] Updating status for wallet {wallet_address} at row {row} to: {new_status}")
-            ws[f'Z{row}'] = new_status
-            wb.save(self.excel_file)
-            wb.close()
+            for wallet, submission in list(self.pending_submissions.items()):
+                message_id = submission.get('message_id')
+                if message_id:
+                    try:
+                        # Try to fetch the message
+                        await channel.fetch_message(message_id)
+                    except discord.NotFound:
+                        # Message doesn't exist anymore
+                        print(f"[CLEANUP] Found orphaned submission for {wallet}, removing from pending")
+                        pending_to_remove.append(wallet)
+                    except Exception as e:
+                        print(f"[CLEANUP] Error checking message for {wallet}: {e}")
             
-            print(f"[EXCEL] Successfully updated status for {wallet_address} to {new_status}")
-            return True
+            # Remove orphaned submissions
+            for wallet in pending_to_remove:
+                if wallet in self.pending_submissions:
+                    del self.pending_submissions[wallet]
+                    print(f"[CLEANUP] Removed {wallet} from pending submissions")
+            
+            print(f"[CLEANUP] Cleanup complete. Pending count: {len(self.pending_submissions)}")
             
         except Exception as e:
-            print(f"[EXCEL ERROR] Error updating Excel status: {e}")
-            traceback.print_exc()
-            return False
+            print(f"[CLEANUP ERROR] Error cleaning up orphaned submissions: {e}")
     
     def submit_from_thread(self, data: dict) -> bool:
         """
@@ -1896,13 +2115,6 @@ class TalentHubBot:
             print(f"[THREAD ERROR] Failed to add submission to queue: {e}")
             traceback.print_exc()
             return False
-    
-    async def post_submission(self, data: dict) -> Optional[discord.Message]:
-        """
-        Async method for posting submissions.
-        Can be called from within the bot's event loop.
-        """
-        return await self._post_submission_to_channel(data.get('walletAddress', ''))
     
     def start(self):
         """Start the bot"""
