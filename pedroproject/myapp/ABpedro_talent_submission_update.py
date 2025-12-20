@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 import traceback
 import queue as thread_queue
 import threading
+import time
+import pandas as pd
 
 load_dotenv()
 
@@ -30,6 +32,16 @@ class TalentHubBot:
         self.initialized = True
         self.excel_file = "Atalent_submissions.xlsx"
         self.bot_code = os.getenv("DISCORD_BOT")
+        
+        # Initialize DataFrame cache
+        self._df = None
+        self._df_last_refresh = None
+        self._df_refresh_interval = 300  # Refresh every 5 minutes (300 seconds)
+        
+        # Command cooldowns
+        self._last_job_open_call = 0
+        self._job_open_cooldown = 3  # seconds
+        self._active_job_open_users = set()
         
         if self.bot_code:
             intents = discord.Intents.default()
@@ -57,20 +69,123 @@ class TalentHubBot:
         self._queue_processing = False
         
         self._ensure_excel_file()
-            
+        
+        # Load initial DataFrame
+        self._refresh_dataframe()
+    
+    def _refresh_dataframe(self):
+        """Refresh the DataFrame from Excel file"""
+        try:
+            print(f"🔄 Refreshing DataFrame from {self.excel_file}")
+            if os.path.exists(self.excel_file):
+                # Read Excel file into DataFrame
+                self._df = pd.read_excel(self.excel_file)
+                self._df_last_refresh = datetime.now()
+
+                print(self._df.head(10))
+                print(f"✅ DataFrame refreshed. Shape: {self._df.shape}")
+                print(f"   Columns: {list(self._df.columns)}")
+                print(f"   Rows: {len(self._df)}")
+                
+                # Ensure Status column exists
+                if 'Status' not in self._df.columns:
+                    print("⚠️ Status column not found in DataFrame. Adding it...")
+                    self._df['Status'] = 'Pending'
+            else:
+                print(f"❌ Excel file not found: {self.excel_file}")
+                self._df = pd.DataFrame()
+                self._df_last_refresh = datetime.now()
+        except Exception as e:
+            print(f"❌ Error refreshing DataFrame: {e}")
+            traceback.print_exc()
+            self._df = pd.DataFrame()
+            self._df_last_refresh = datetime.now()
+    
+    async def _refresh_dataframe_if_needed(self):
+        """Refresh DataFrame if it's been too long since last refresh"""
+        if self._df is None:
+            self._refresh_dataframe()
+            return True
+        
+        if self._df_last_refresh is None:
+            self._refresh_dataframe()
+            return True
+        
+        time_since_refresh = (datetime.now() - self._df_last_refresh).total_seconds()
+        if time_since_refresh > self._df_refresh_interval:
+            print(f"🔄 DataFrame stale ({time_since_refresh:.0f}s old). Refreshing...")
+            self._refresh_dataframe()
+            return True
+        
+        return False
+    
+    async def _save_and_refresh_dataframe(self):
+        """Save DataFrame to Excel and refresh"""
+        try:
+            if self._df is not None and not self._df.empty:
+                # Save DataFrame to Excel
+                self._df.to_excel(self.excel_file, index=False)
+                print(f"💾 Saved DataFrame to {self.excel_file}")
+                
+                # Refresh the DataFrame to ensure consistency
+                self._refresh_dataframe()
+                return True
+        except Exception as e:
+            print(f"❌ Error saving DataFrame: {e}")
+            traceback.print_exc()
+        
+        return False
+    
+    def wait_for_bot_loop(self, timeout: int = 30) -> bool:
+        """Wait for the bot loop to be available"""
+        if self._bot_ready.is_set() and self._bot_loop:
+            return True
+        
+        print(f"⏳ Waiting for bot loop to be ready (timeout: {timeout}s)...")
+        try:
+            success = self._bot_ready.wait(timeout=timeout)
+            if success:
+                print("✅ Bot loop is ready")
+                return True
+            else:
+                print("❌ Timeout waiting for bot loop")
+                return False
+        except Exception as e:
+            print(f"❌ Error waiting for bot loop: {e}")
+            return False
+    
     def _setup_bot(self):
         """Setup bot events and commands"""
         @self.bot.event
         async def on_ready():
             await self._on_ready_callback()
         
-        self.bot.tree.command(name="job_open")(self.job_open_command)
-        self.bot.tree.command(name="job_show")(self.show_command)
-        self.bot.tree.command(name="job_change")(self.change_command)
-        self.bot.tree.command(name="job_remove")(self.remove_command)
-        self.bot.tree.command(name="job_variable")(self.column_names_command)
-        self.bot.tree.command(name="job_status")(self.job_status_command)
+        # Setup slash commands
+        @self.bot.tree.command(name="job_open", description="Open pending submissions to review")
+        async def job_open_slash(interaction: discord.Interaction):
+            await self.job_open_command(interaction)
         
+        @self.bot.tree.command(name="job_show", description="Show all approved submissions")
+        async def show_slash(interaction: discord.Interaction):
+            await self.show_command(interaction)
+        
+        @self.bot.tree.command(name="job_change", description="Change a field in a submission")
+        async def change_slash(interaction: discord.Interaction, wallet_address: str, column_name: str, new_value: str):
+            await self.change_command(interaction, wallet_address, column_name, new_value)
+        
+        @self.bot.tree.command(name="job_remove", description="Remove a submission from the database")
+        async def remove_slash(interaction: discord.Interaction, wallet_address: str):
+            await self.remove_command(interaction, wallet_address)
+        
+        @self.bot.tree.command(name="job_variable", description="List all available column names")
+        async def column_names_slash(interaction: discord.Interaction):
+            await self.column_names_command(interaction)
+        
+        @self.bot.tree.command(name="job_status", description="Show submission status counts")
+        async def job_status_slash(interaction: discord.Interaction):
+            await self.job_status_command(interaction)
+        
+        # Setup prefix commands
         @self.bot.command(name="job_open")
         async def job_open_prefix(ctx):
             await self.job_open_prefix_command(ctx)
@@ -135,9 +250,34 @@ class TalentHubBot:
             
             asyncio.create_task(self._periodic_notifications())
             
+            # Start DataFrame refresh task
+            asyncio.create_task(self._periodic_dataframe_refresh())
+            
         except Exception as e:
             print(f"❌ Error during bot ready: {e}")
             traceback.print_exc()
+    
+    async def _periodic_dataframe_refresh(self):
+        """Periodically refresh the DataFrame"""
+        print("🔄 Starting periodic DataFrame refresh...")
+        
+        # Wait for bot to be fully ready
+        await self.bot.wait_until_ready()
+        
+        while not self.bot.is_closed():
+            try:
+                # Wait for refresh interval
+                await asyncio.sleep(self._df_refresh_interval)
+                
+                # Refresh DataFrame
+                self._refresh_dataframe()
+                
+                print(f"✅ DataFrame auto-refreshed at {datetime.now().strftime('%H:%M:%S')}")
+                
+            except Exception as e:
+                print(f"[DATAFRAME REFRESH ERROR] {e}")
+                traceback.print_exc()
+                await asyncio.sleep(60)  # Wait 1 minute before retry
     
     async def _process_queued_submissions(self):
         """Process any submissions that were queued before bot was ready"""
@@ -163,10 +303,30 @@ class TalentHubBot:
             traceback.print_exc()
     
     async def _handle_interaction(self, interaction: discord.Interaction):
-        """Handle button interactions"""
-        if interaction.type != discord.InteractionType.component:
-            return
-            
+        """Handle ALL interactions"""
+        try:
+            # Check interaction type
+            if interaction.type == discord.InteractionType.component:
+                await self._handle_component_interaction(interaction)
+            # Application commands are handled by their decorators
+                
+        except Exception as e:
+            print(f"[INTERACTION ERROR] Error handling interaction: {e}")
+            traceback.print_exc()
+            try:
+                if not interaction.response.is_done():
+                    try:
+                        await interaction.response.send_message(
+                            "❌ An error occurred while processing your request!",
+                            ephemeral=True
+                        )
+                    except discord.errors.NotFound:
+                        print(f"[INTERACTION WARNING] Interaction expired")
+            except:
+                pass
+    
+    async def _handle_component_interaction(self, interaction: discord.Interaction):
+        """Handle component interactions (buttons, selects)"""
         try:
             custom_id = interaction.data.get('custom_id', '')
             
@@ -183,7 +343,11 @@ class TalentHubBot:
                 
                 # Respond immediately to avoid timeout
                 if not interaction.response.is_done():
-                    await interaction.response.defer(ephemeral=True)
+                    try:
+                        await interaction.response.defer(ephemeral=True, thinking=True)
+                    except discord.errors.NotFound:
+                        print(f"[INTERACTION WARNING] Interaction already expired for {action}:{wallet}")
+                        return
                 
                 if action == "quick_approve":
                     await self._handle_quick_approve(interaction, wallet)
@@ -191,10 +355,13 @@ class TalentHubBot:
                     await self._handle_review_button(interaction, wallet)
                 else:
                     if not interaction.response.is_done():
-                        await interaction.response.send_message(
-                            f"❌ Unknown action: {action}",
-                            ephemeral=True
-                        )
+                        try:
+                            await interaction.response.send_message(
+                                f"❌ Unknown action: {action}",
+                                ephemeral=True
+                            )
+                        except discord.errors.NotFound:
+                            print(f"[INTERACTION WARNING] Interaction expired for unknown action")
             
             elif len(parts) == 3:
                 action_type, action, wallet = parts
@@ -204,42 +371,55 @@ class TalentHubBot:
                 
                 # Respond immediately to avoid timeout
                 if not interaction.response.is_done():
-                    await interaction.response.defer(ephemeral=True)
+                    try:
+                        await interaction.response.defer(ephemeral=True, thinking=True)
+                    except discord.errors.NotFound:
+                        print(f"[INTERACTION WARNING] Interaction already expired for {action_type}:{action}:{wallet}")
+                        return
                 
                 if action_type == "submission":
                     print(f"[INTERACTION] Routing to submission handler")
-                    asyncio.create_task(self._handle_submission_interaction(interaction, action, wallet))
+                    await self._handle_submission_interaction(interaction, action, wallet)
                 else:
                     print(f"[INTERACTION WARNING] Unknown action type: {action_type}")
                     if not interaction.response.is_done():
-                        await interaction.response.send_message(
-                            f"❌ Unknown action type: {action_type}",
-                            ephemeral=True
-                        )
+                        try:
+                            await interaction.response.send_message(
+                                f"❌ Unknown action type: {action_type}",
+                                ephemeral=True
+                            )
+                        except discord.errors.NotFound:
+                            print(f"[INTERACTION WARNING] Interaction expired")
             else:
                 print(f"[INTERACTION ERROR] Invalid parts count: {len(parts)}")
                 if not interaction.response.is_done():
-                    await interaction.response.send_message(
-                        "❌ Invalid interaction format!",
-                        ephemeral=True
-                    )
+                    try:
+                        await interaction.response.send_message(
+                            "❌ Invalid interaction format!",
+                            ephemeral=True
+                        )
+                    except discord.errors.NotFound:
+                        print(f"[INTERACTION WARNING] Interaction expired")
                 
         except Exception as e:
-            print(f"[INTERACTION ERROR] Error handling interaction: {e}")
+            print(f"[INTERACTION ERROR] Error handling component interaction: {e}")
             traceback.print_exc()
             try:
                 if not interaction.response.is_done():
-                    await interaction.response.send_message(
-                        "❌ An error occurred while processing your request!",
-                        ephemeral=True
-                    )
+                    try:
+                        await interaction.response.send_message(
+                            "❌ An error occurred while processing your request!",
+                            ephemeral=True
+                        )
+                    except discord.errors.NotFound:
+                        print(f"[INTERACTION WARNING] Interaction expired")
             except:
                 pass
     
     async def _handle_quick_approve(self, interaction: discord.Interaction, wallet: str):
         """Handle quick approve from notification"""
         try:
-            # Update status in Excel
+            # Update status in DataFrame
             success = await self._update_excel_status(wallet, "Approved")
             
             if success:
@@ -283,6 +463,7 @@ class TalentHubBot:
                         color=discord.Color.green()
                     )
                     confirmation_embed.add_field(name="Wallet", value=f"`{wallet}`", inline=False)
+                    confirmation_embed.set_footer(text=f"Approved at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                     await channel.send(embed=confirmation_embed)
             else:
                 await interaction.followup.send(
@@ -293,10 +474,240 @@ class TalentHubBot:
         except Exception as e:
             print(f"[QUICK APPROVE ERROR] {e}")
             traceback.print_exc()
+            try:
+                await interaction.followup.send(
+                    "❌ An error occurred while processing quick approve.",
+                    ephemeral=True
+                )
+            except:
+                pass
+
+    async def _handle_review_button(self, interaction: discord.Interaction, wallet: str):
+        """Handle review button click - shows submission details"""
+        try:
+            # Get record details
+            record = await self._get_record_details(wallet)
+            
+            if not record:
+                await interaction.followup.send(
+                    f"❌ Could not find details for wallet: `{wallet}`",
+                    ephemeral=True
+                )
+                return
+            
+            # Create embed with submission details
+            detail_embed = discord.Embed(
+                title=f"📄 Submission Review",
+                description=f"**{record.get('Name', 'N/A')}** - {record.get('Role', 'N/A')}",
+                color=discord.Color.blue()
+            )
+            
+            # Basic info
+            detail_embed.add_field(
+                name="Basic Info",
+                value=f"**Experience:** {record.get('Experience', 'N/A')}\n"
+                    f"**Education:** {record.get('Education', 'N/A')}\n"
+                    f"**Location:** {record.get('Location', 'N/A')}\n"
+                    f"**Available:** {record.get('Availability', 'N/A')}",
+                inline=False
+            )
+            
+            # Wallet info
+            detail_embed.add_field(
+                name="Wallet",
+                value=f"`{wallet}`",
+                inline=False
+            )
+            
+            # Skills
+            skills = record.get('Skills', 'N/A')
+            detail_embed.add_field(
+                name="Skills",
+                value=skills[:500] + "..." if len(skills) > 500 else skills,
+                inline=False
+            )
+            
+            # Languages
+            languages = record.get('Languages', 'N/A')
+            detail_embed.add_field(
+                name="Languages",
+                value=languages[:200] + "..." if len(languages) > 200 else languages,
+                inline=False
+            )
+            
+            detail_embed.set_footer(text=f"Wallet: {wallet[:8]}...{wallet[-6:]}")
+            
+            # Create review buttons
+            class ReviewView(discord.ui.View):
+                def __init__(self, bot_instance, wallet, user_name):
+                    super().__init__(timeout=180)
+                    self.bot_instance = bot_instance
+                    self.wallet = wallet
+                    self.user_name = user_name
+                
+                @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji="✅", row=0)
+                async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                    await interaction.response.defer(ephemeral=True)
+                    
+                    success = await self.bot_instance._update_excel_status(self.wallet, "Approved")
+                    
+                    if success:
+                        await interaction.followup.send(
+                            f"✅ Submission approved for wallet `{self.wallet}`!",
+                            ephemeral=True
+                        )
+                        
+                        # Update original message
+                        detail_embed.title = f"✅ Submission Approved"
+                        detail_embed.color = discord.Color.green()
+                        detail_embed.set_footer(text=f"Approved by {self.user_name}")
+                        
+                        # Remove buttons
+                        await interaction.message.edit(embed=detail_embed, view=None)
+                    else:
+                        await interaction.followup.send(
+                            f"❌ Failed to approve submission for wallet `{self.wallet}`",
+                            ephemeral=True
+                        )
+                
+                @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji="❌", row=0)
+                async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                    await interaction.response.defer(ephemeral=True)
+                    
+                    success = await self.bot_instance._update_excel_status(self.wallet, "Rejected")
+                    
+                    if success:
+                        await interaction.followup.send(
+                            f"❌ Submission rejected for wallet `{self.wallet}`!",
+                            ephemeral=True
+                        )
+                        
+                        # Update original message
+                        detail_embed.title = f"❌ Submission Rejected"
+                        detail_embed.color = discord.Color.red()
+                        detail_embed.set_footer(text=f"Rejected by {self.user_name}")
+                        
+                        # Remove buttons
+                        await interaction.message.edit(embed=detail_embed, view=None)
+                    else:
+                        await interaction.followup.send(
+                            f"❌ Failed to reject submission for wallet `{self.wallet}`",
+                            ephemeral=True
+                        )
+                
+                @discord.ui.button(label="View Full Details", style=discord.ButtonStyle.secondary, emoji="👁️", row=1)
+                async def view_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                    await interaction.response.defer(ephemeral=True)
+                    
+                    record = await self.bot_instance._get_record_details(self.wallet)
+                    
+                    if not record:
+                        await interaction.followup.send(
+                            f"❌ Could not find details for wallet: `{self.wallet}`",
+                            ephemeral=True
+                        )
+                        return
+                    
+                    # Create a more detailed embed
+                    full_embed = discord.Embed(
+                        title=f"📋 Full Submission Details",
+                        description=f"**{record.get('Name', 'N/A')}**",
+                        color=discord.Color.green()
+                    )
+                    
+                    # Professional Info
+                    full_embed.add_field(
+                        name="Professional Info",
+                        value=f"**Role:** {record.get('Role', 'N/A')}\n"
+                            f"**Injective Role:** {record.get('Injective Role', 'N/A')}\n"
+                            f"**Experience:** {record.get('Experience', 'N/A')}\n"
+                            f"**Education:** {record.get('Education', 'N/A')}\n"
+                            f"**Location:** {record.get('Location', 'N/A')}\n"
+                            f"**Monthly Rate:** {record.get('Monthly Rate', 'N/A')}\n"
+                            f"**Available:** {record.get('Availability', 'N/A')}",
+                        inline=False
+                    )
+                    
+                    # Contact info
+                    contact_info = [
+                        f"**Discord:** {record.get('Discord', '-')}",
+                        f"**Email:** {record.get('Email', '-')}",
+                        f"**Phone:** {record.get('Phone', '-')}",
+                        f"**Telegram:** {record.get('Telegram', '-')}",
+                        f"**X/Twitter:** {record.get('X', '-')}",
+                        f"**GitHub:** {record.get('Github', '-')}"
+                    ]
+                    full_embed.add_field(
+                        name="Contact Information",
+                        value="\n".join(contact_info),
+                        inline=False
+                    )
+                    
+                    # Wallet info
+                    full_embed.add_field(
+                        name="Wallet Information",
+                        value=f"**Address:** `{self.wallet}`\n"
+                            f"**Type:** {record.get('Wallet Type', 'N/A')}\n"
+                            f"**NFT Holdings:** {record.get('NFT Holdings', 'N/A')}\n"
+                            f"**Token Holdings:** {record.get('Token Holdings', 'N/A')}",
+                        inline=False
+                    )
+                    
+                    # Links
+                    links = []
+                    portfolio = record.get('Portfolio', '')
+                    if portfolio and portfolio != 'N/A' and portfolio != '-':
+                        links.append(f"**Portfolio:** [Link]({portfolio})")
+                    
+                    cv = record.get('CV', '')
+                    if cv and cv != 'N/A' and cv != '-':
+                        links.append(f"**CV/Resume:** [Download]({cv})")
+                    
+                    image = record.get('Image url', '')
+                    if image and image != 'N/A' and image != '-':
+                        links.append(f"**Profile Picture:** [View]({image})")
+                    
+                    if links:
+                        full_embed.add_field(
+                            name="Links",
+                            value="\n".join(links),
+                            inline=False
+                        )
+                    
+                    # Bio
+                    bio = record.get('Bio', 'No bio provided')
+                    full_embed.add_field(
+                        name="Bio",
+                        value=f"{bio[:1000]}{'...' if len(bio) > 1000 else ''}",
+                        inline=False
+                    )
+                    
+                    full_embed.set_footer(text=f"Wallet: {self.wallet[:8]}...{self.wallet[-6:]}")
+                    
+                    await interaction.followup.send(embed=full_embed, ephemeral=True)
+                
+                @discord.ui.button(label="Close", style=discord.ButtonStyle.danger, emoji="❌", row=1)
+                async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                    await interaction.response.defer(ephemeral=True)
+                    await interaction.message.delete()
+                    await interaction.followup.send("✅ Review closed.", ephemeral=True)
+            
             await interaction.followup.send(
-                "❌ An error occurred while processing quick approve.",
+                embed=detail_embed, 
+                view=ReviewView(self, wallet, interaction.user.name),
                 ephemeral=True
             )
+            
+        except Exception as e:
+            print(f"[REVIEW BUTTON ERROR] {e}")
+            traceback.print_exc()
+            try:
+                await interaction.followup.send(
+                    "❌ An error occurred while loading submission details.",
+                    ephemeral=True
+                )
+            except:
+                pass
 
     async def job_open_command(self, interaction: discord.Interaction):
         """
@@ -305,163 +716,416 @@ class TalentHubBot:
         When selected, shows embed with details and Approve/Reject/Close buttons.
         Updates Excel status accordingly.
         """
-        await interaction.response.defer()
+        user_name = interaction.user.name
+        user_id = interaction.user.id
+        
+        print(f"[JOB_OPEN] User {user_name} ({user_id}) is calling /job_open")
+        
+        # Defer immediately to avoid timeout
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except discord.errors.InteractionResponded:
+            print(f"[JOB_OPEN] Interaction already responded for {user_name}")
+            return
+        except discord.errors.NotFound:
+            print(f"[JOB_OPEN] Interaction expired for {user_name}")
+            return
+        except Exception as e:
+            print(f"[JOB_OPEN] Error deferring: {e}")
+            return
+        
+        # Check if user already has an active session
+        if user_id in self._active_job_open_users:
+            try:
+                await interaction.followup.send(
+                    "⏳ You already have an active /job_open session. Please use that one.",
+                    ephemeral=True
+                )
+                return
+            except discord.errors.NotFound:
+                print(f"[JOB_OPEN] Interaction expired for {user_name} (already has active session)")
+                return
+            except Exception as e:
+                print(f"[JOB_OPEN] Error updating duplicate session message: {e}")
+                return
+        
+        # Check cooldown
+        current_time = time.time()
+        if current_time - self._last_job_open_call < self._job_open_cooldown:
+            try:
+                await interaction.followup.send(
+                    "⏳ Please wait a few seconds before using this command again.",
+                    ephemeral=True
+                )
+                return
+            except discord.errors.NotFound:
+                print(f"[JOB_OPEN] Interaction expired for {user_name} (cooldown)")
+                return
+            except Exception as e:
+                print(f"[JOB_OPEN] Error updating cooldown message: {e}")
+                return
+        
+        self._last_job_open_call = current_time
+        self._active_job_open_users.add(user_id)
         
         try:
-            pending_records = await self._get_pending_records()
-            
-            if not pending_records:
-                embed = discord.Embed(
-                    title="📭 Pending Submissions",
-                    description="No submissions waiting for review.",
-                    color=discord.Color.green()
-                )
-                await interaction.followup.send(embed=embed)
-                return
-            
-            embed = discord.Embed(
-                title="📬 Pending Submissions",
-                description=f"Select a submission to review:",
-                color=discord.Color.blue()
+            # Let user know we're working on it
+            await interaction.followup.send(
+                "🔄 Fetching pending submissions...",
+                ephemeral=True
             )
-            embed.add_field(name="📋 Total Pending", value=f"{len(pending_records)} submission(s)", inline=False)
-            embed.set_footer(text="Select a submission from the dropdown below")
             
-            original_message = None
+            # Refresh DataFrame if needed
+            await self._refresh_dataframe_if_needed()
             
-            class SubmissionSelect(discord.ui.Select):
-                def __init__(self, bot_instance, records):
-                    options = []
-                    for name, wallet in records[:25]: 
-                        options.append(discord.SelectOption(
-                            label=f"{name[:90]}",
-                            description=f"Click to review",
-                            value=wallet,
-                            emoji="📄"
-                        ))
-                    
-                    super().__init__(
-                        placeholder="Choose a submission to review...",
-                        min_values=1,
-                        max_values=1,
-                        options=options
-                    )
-                    self.bot_instance = bot_instance
-                    self.records = records 
+            # Use lock to prevent multiple simultaneous accesses
+            async with self._lock:
+                # Get pending records from DataFrame
+                print(f"[DEBUG] Fetching pending records for /job_open from DataFrame...")
+                pending_records = await self._get_pending_records()
+                print(f"[DEBUG] Found {len(pending_records)} pending records")
                 
-                async def callback(self, interaction: discord.Interaction):
-                    await interaction.response.defer()
-                    wallet = self.values[0]
-                    
-                    record = await self.bot_instance._get_record_details(wallet)
-                    
-                    if not record:
+                if not pending_records:
+                    try:
+                        # Send a new message since the followup was already sent
                         await interaction.followup.send(
-                            f"❌ Could not find details for wallet: `{wallet}`",
+                            embed=discord.Embed(
+                                title="📭 Pending Submissions",
+                                description="No submissions waiting for review.",
+                                color=discord.Color.green()
+                            ),
                             ephemeral=True
                         )
                         return
-                    
-                    detail_embed = discord.Embed(
-                        title=f"📄 Submission Review",
-                        description=f"**{record.get('Name', 'N/A')}** - {record.get('Role', 'N/A')}",
-                        color=discord.Color.blue()
-                    )
-                    
-                    detail_embed.add_field(
-                        name="Basic Info",
-                        value=f"**Experience:** {record.get('Experience', 'N/A')}\n"
-                            f"**Education:** {record.get('Education', 'N/A')}\n"
-                            f"**Location:** {record.get('Location', 'N/A')}\n"
-                            f"**Available:** {record.get('Availability', 'N/A')}",
-                        inline=False
-                    )
-                    
-                    detail_embed.add_field(
-                        name="Wallet",
-                        value=f"`{wallet}`",
-                        inline=False
-                    )
-                    
-                    skills = record.get('Skills', 'N/A')
-                    detail_embed.add_field(
-                        name="Skills",
-                        value=skills[:500] + "..." if len(skills) > 500 else skills,
-                        inline=False
-                    )
-                    
-                    languages = record.get('Languages', 'N/A')
-                    detail_embed.add_field(
-                        name="Languages",
-                        value=languages[:200] + "..." if len(languages) > 200 else languages,
-                        inline=False
-                    )
-                    
-                    detail_embed.set_footer(text=f"Wallet: {wallet[:8]}...{wallet[-6:]}")
-                    
-                    class ReviewView(discord.ui.View):
-                        def __init__(self, bot_instance, wallet, user_name, original_view):
-                            super().__init__(timeout=180)
-                            self.bot_instance = bot_instance
-                            self.wallet = wallet
-                            self.user_name = user_name
-                            self.original_view = original_view
+                    except discord.errors.NotFound:
+                        print(f"[JOB_OPEN] Interaction expired while showing no records")
+                        return
+                
+                embed = discord.Embed(
+                    title="📬 Pending Submissions",
+                    description=f"Select a submission to review:",
+                    color=discord.Color.blue()
+                )
+                embed.add_field(name="📋 Total Pending", value=f"{len(pending_records)} submission(s)", inline=False)
+                embed.set_footer(text="Select a submission from the dropdown below")
+                
+                class SubmissionSelect(discord.ui.Select):
+                    def __init__(self, bot_instance, records, user_id):
+                        options = []
+                        for name, wallet in records[:25]: 
+                            options.append(discord.SelectOption(
+                                label=f"{name[:90]}",
+                                description=f"Click to review",
+                                value=wallet,
+                                emoji="📄"
+                            ))
                         
-                        @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji="✅", row=0)
-                        async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                            await interaction.response.defer()
+                        super().__init__(
+                            placeholder="Choose a submission to review...",
+                            min_values=1,
+                            max_values=1,
+                            options=options
+                        )
+                        self.bot_instance = bot_instance
+                        self.records = records
+                        self.user_id = user_id
+                    
+                    async def callback(self, interaction: discord.Interaction):
+                        # Check if this is the same user who opened the menu
+                        if interaction.user.id != self.user_id:
+                            await interaction.response.send_message(
+                                "❌ This menu was opened by another user. Please use `/job_open` yourself.",
+                                ephemeral=True
+                            )
+                            return
+                        
+                        # Always defer immediately
+                        try:
+                            await interaction.response.defer(ephemeral=True)
+                        except discord.errors.NotFound:
+                            print(f"[SUBMISSION SELECT] Interaction expired")
+                            return
+                        
+                        wallet = self.values[0]
+                        
+                        record = await self.bot_instance._get_record_details(wallet)
+                        
+                        if not record:
+                            await interaction.followup.send(
+                                f"❌ Could not find details for wallet: `{wallet}`",
+                                ephemeral=True
+                            )
+                            return
+                        
+                        detail_embed = discord.Embed(
+                            title=f"📄 Submission Review",
+                            description=f"**{record.get('Name', 'N/A')}** - {record.get('Role', 'N/A')}",
+                            color=discord.Color.blue()
+                        )
+                        
+                        detail_embed.add_field(
+                            name="Basic Info",
+                            value=f"**Experience:** {record.get('Experience', 'N/A')}\n"
+                                f"**Education:** {record.get('Education', 'N/A')}\n"
+                                f"**Location:** {record.get('Location', 'N/A')}\n"
+                                f"**Available:** {record.get('Availability', 'N/A')}",
+                            inline=False
+                        )
+                        
+                        detail_embed.add_field(
+                            name="Wallet",
+                            value=f"`{wallet}`",
+                            inline=False
+                        )
+                        
+                        skills = record.get('Skills', 'N/A')
+                        detail_embed.add_field(
+                            name="Skills",
+                            value=skills[:500] + "..." if len(skills) > 500 else skills,
+                            inline=False
+                        )
+                        
+                        languages = record.get('Languages', 'N/A')
+                        detail_embed.add_field(
+                            name="Languages",
+                            value=languages[:200] + "..." if len(languages) > 200 else languages,
+                            inline=False
+                        )
+                        
+                        detail_embed.set_footer(text=f"Wallet: {wallet[:8]}...{wallet[-6:]}")
+                        
+                        class ReviewView(discord.ui.View):
+                            def __init__(self, bot_instance, wallet, user_name, user_id):
+                                super().__init__(timeout=180)
+                                self.bot_instance = bot_instance
+                                self.wallet = wallet
+                                self.user_name = user_name
+                                self.user_id = user_id
                             
-                            success = await self.bot_instance._update_excel_status(self.wallet, "Approved")
-                            
-                            if success:
-                                confirmation_embed = discord.Embed(
-                                    title="✅ Submission Approved",
-                                    description=f"**{self.wallet}** has been approved by {self.user_name}.",
-                                    color=discord.Color.green()
-                                )
-                                confirmation_embed.add_field(name="Status", value="✅ **APPROVED**", inline=True)
-                                confirmation_embed.add_field(name="Action", value="✅ Approved", inline=True)
-                                confirmation_embed.set_footer(text=f"Completed at {datetime.now().strftime('%H:%M:%S')}")
+                            @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji="✅", row=0)
+                            async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                                # Check if this is the same user
+                                if interaction.user.id != self.user_id:
+                                    await interaction.response.send_message(
+                                        "❌ This review session was opened by another user.",
+                                        ephemeral=True
+                                    )
+                                    return
                                 
                                 try:
-                                    await interaction.message.delete()
-                                except:
-                                    pass
+                                    await interaction.response.defer(ephemeral=True)
+                                except discord.errors.NotFound:
+                                    print(f"[APPROVE] Interaction expired")
+                                    return
                                 
-                                await interaction.followup.send(embed=confirmation_embed, ephemeral=True)
+                                success = await self.bot_instance._update_excel_status(self.wallet, "Approved")
                                 
-                                channel = self.bot_instance.bot.get_channel(self.bot_instance.submission_channel_id)
-                                if channel:
-                                    public_embed = discord.Embed(
+                                if success:
+                                    confirmation_embed = discord.Embed(
                                         title="✅ Submission Approved",
-                                        description=f"A submission has been approved by {self.user_name}.",
+                                        description=f"**{self.wallet}** has been approved by {self.user_name}.",
                                         color=discord.Color.green()
                                     )
-                                    public_embed.add_field(name="Wallet", value=f"`{self.wallet[:8]}...{self.wallet[-6:]}`", inline=False)
-                                    public_embed.set_footer(text=f"Approved at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                                    await channel.send(embed=public_embed)
-                            else:
-                                await interaction.followup.send(
-                                    f"❌ Failed to approve submission for wallet `{self.wallet}`",
-                                    ephemeral=True
-                                )
-                        
-                        @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji="❌", row=0)
-                        async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                            await interaction.response.defer()
+                                    confirmation_embed.add_field(name="Status", value="✅ **APPROVED**", inline=True)
+                                    confirmation_embed.add_field(name="Action", value="✅ Approved", inline=True)
+                                    confirmation_embed.set_footer(text=f"Completed at {datetime.now().strftime('%H:%M:%S')}")
+                                    
+                                    try:
+                                        await interaction.message.delete()
+                                    except:
+                                        pass
+                                    
+                                    await interaction.followup.send(embed=confirmation_embed, ephemeral=True)
+                                    
+                                    channel = self.bot_instance.bot.get_channel(self.bot_instance.submission_channel_id)
+                                    if channel:
+                                        public_embed = discord.Embed(
+                                            title="✅ Submission Approved",
+                                            description=f"A submission has been approved by {self.user_name}.",
+                                            color=discord.Color.green()
+                                        )
+                                        public_embed.add_field(name="Wallet", value=f"`{self.wallet[:8]}...{self.wallet[-6:]}`", inline=False)
+                                        public_embed.set_footer(text=f"Approved at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                                        await channel.send(embed=public_embed)
+                                else:
+                                    await interaction.followup.send(
+                                        f"❌ Failed to approve submission for wallet `{self.wallet}`",
+                                        ephemeral=True
+                                    )
                             
-                            success = await self.bot_instance._update_excel_status(self.wallet, "Rejected")
+                            @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji="❌", row=0)
+                            async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                                # Check if this is the same user
+                                if interaction.user.id != self.user_id:
+                                    await interaction.response.send_message(
+                                        "❌ This review session was opened by another user.",
+                                        ephemeral=True
+                                    )
+                                    return
+                                
+                                try:
+                                    await interaction.response.defer(ephemeral=True)
+                                except discord.errors.NotFound:
+                                    print(f"[REJECT] Interaction expired")
+                                    return
+                                
+                                success = await self.bot_instance._update_excel_status(self.wallet, "Rejected")
+                                
+                                if success:
+                                    # Send confirmation message
+                                    confirmation_embed = discord.Embed(
+                                        title="❌ Submission Rejected",
+                                        description=f"**{self.wallet}** has been rejected by {self.user_name}.",
+                                        color=discord.Color.red()
+                                    )
+                                    confirmation_embed.add_field(name="Status", value="❌ **REJECTED**", inline=True)
+                                    confirmation_embed.add_field(name="Action", value="❌ Rejected", inline=True)
+                                    confirmation_embed.set_footer(text=f"Completed at {datetime.now().strftime('%H:%M:%S')}")
+                                    
+                                    # Delete the review message
+                                    try:
+                                        await interaction.message.delete()
+                                    except:
+                                        pass
+                                    
+                                    # Send confirmation
+                                    await interaction.followup.send(embed=confirmation_embed, ephemeral=True)
+                                    
+                                    # Also send a public notification to the channel
+                                    channel = self.bot_instance.bot.get_channel(self.bot_instance.submission_channel_id)
+                                    if channel:
+                                        public_embed = discord.Embed(
+                                            title="❌ Submission Rejected",
+                                            description=f"A submission has been rejected by {self.user_name}.",
+                                            color=discord.Color.red()
+                                        )
+                                        public_embed.add_field(name="Wallet", value=f"`{self.wallet[:8]}...{self.wallet[-6:]}`", inline=False)
+                                        public_embed.set_footer(text=f"Rejected at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                                        await channel.send(embed=public_embed)
+                                else:
+                                    await interaction.followup.send(
+                                        f"❌ Failed to reject submission for wallet `{self.wallet}`",
+                                        ephemeral=True
+                                    )
                             
-                            if success:
-                                # Send confirmation message
-                                confirmation_embed = discord.Embed(
-                                    title="❌ Submission Rejected",
-                                    description=f"**{self.wallet}** has been rejected by {self.user_name}.",
-                                    color=discord.Color.red()
+                            @discord.ui.button(label="View Full Details", style=discord.ButtonStyle.secondary, emoji="👁️", row=1)
+                            async def view_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                                # Check if this is the same user
+                                if interaction.user.id != self.user_id:
+                                    await interaction.response.send_message(
+                                        "❌ This review session was opened by another user.",
+                                        ephemeral=True
+                                    )
+                                    return
+                                
+                                try:
+                                    await interaction.response.defer(ephemeral=True)
+                                except discord.errors.NotFound:
+                                    print(f"[VIEW] Interaction expired")
+                                    return
+                                
+                                record = await self.bot_instance._get_record_details(self.wallet)
+                                
+                                if not record:
+                                    await interaction.followup.send(
+                                        f"❌ Could not find details for wallet: `{self.wallet}`",
+                                        ephemeral=True
+                                    )
+                                    return
+                                
+                                # Create a more detailed embed
+                                full_embed = discord.Embed(
+                                    title=f"📋 Full Submission Details",
+                                    description=f"**{record.get('Name', 'N/A')}**",
+                                    color=discord.Color.green()
                                 )
-                                confirmation_embed.add_field(name="Status", value="❌ **REJECTED**", inline=True)
-                                confirmation_embed.add_field(name="Action", value="❌ Rejected", inline=True)
-                                confirmation_embed.set_footer(text=f"Completed at {datetime.now().strftime('%H:%M:%S')}")
+                                
+                                # Professional Info
+                                full_embed.add_field(
+                                    name="Professional Info",
+                                    value=f"**Role:** {record.get('Role', 'N/A')}\n"
+                                        f"**Injective Role:** {record.get('Injective Role', 'N/A')}\n"
+                                        f"**Experience:** {record.get('Experience', 'N/A')}\n"
+                                        f"**Education:** {record.get('Education', 'N/A')}\n"
+                                        f"**Location:** {record.get('Location', 'N/A')}\n"
+                                        f"**Monthly Rate:** {record.get('Monthly Rate', 'N/A')}\n"
+                                        f"**Available:** {record.get('Availability', 'N/A')}",
+                                    inline=False
+                                )
+                                
+                                # Contact info
+                                contact_info = [
+                                    f"**Discord:** {record.get('Discord', '-')}",
+                                    f"**Email:** {record.get('Email', '-')}",
+                                    f"**Phone:** {record.get('Phone', '-')}",
+                                    f"**Telegram:** {record.get('Telegram', '-')}",
+                                    f"**X/Twitter:** {record.get('X', '-')}",
+                                    f"**GitHub:** {record.get('Github', '-')}"
+                                ]
+                                full_embed.add_field(
+                                    name="Contact Information",
+                                    value="\n".join(contact_info),
+                                    inline=False
+                                )
+                                
+                                # Wallet info
+                                full_embed.add_field(
+                                    name="Wallet Information",
+                                    value=f"**Address:** `{self.wallet}`\n"
+                                        f"**Type:** {record.get('Wallet Type', 'N/A')}\n"
+                                        f"**NFT Holdings:** {record.get('NFT Holdings', 'N/A')}\n"
+                                        f"**Token Holdings:** {record.get('Token Holdings', 'N/A')}",
+                                    inline=False
+                                )
+                                
+                                # Links
+                                links = []
+                                portfolio = record.get('Portfolio', '')
+                                if portfolio and portfolio != 'N/A' and portfolio != '-':
+                                    links.append(f"**Portfolio:** [Link]({portfolio})")
+                                
+                                cv = record.get('CV', '')
+                                if cv and cv != 'N/A' and cv != '-':
+                                    links.append(f"**CV/Resume:** [Download]({cv})")
+                                
+                                image = record.get('Image url', '')
+                                if image and image != 'N/A' and image != '-':
+                                    links.append(f"**Profile Picture:** [View]({image})")
+                                
+                                if links:
+                                    full_embed.add_field(
+                                        name="Links",
+                                        value="\n".join(links),
+                                        inline=False
+                                    )
+                                
+                                # Bio
+                                bio = record.get('Bio', 'No bio provided')
+                                full_embed.add_field(
+                                    name="Bio",
+                                    value=f"{bio[:1000]}{'...' if len(bio) > 1000 else ''}",
+                                    inline=False
+                                )
+                                
+                                full_embed.set_footer(text=f"Wallet: {self.wallet[:8]}...{self.wallet[-6:]}")
+                                
+                                await interaction.followup.send(embed=full_embed, ephemeral=True)
+                            
+                            @discord.ui.button(label="Close Review", style=discord.ButtonStyle.secondary, emoji="❌", row=1)
+                            async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                                # Check if this is the same user
+                                if interaction.user.id != self.user_id:
+                                    await interaction.response.send_message(
+                                        "❌ This review session was opened by another user.",
+                                        ephemeral=True
+                                    )
+                                    return
+                                
+                                try:
+                                    await interaction.response.defer(ephemeral=True)
+                                except discord.errors.NotFound:
+                                    print(f"[CLOSE] Interaction expired")
+                                    return
                                 
                                 # Delete the review message
                                 try:
@@ -470,170 +1134,81 @@ class TalentHubBot:
                                     pass
                                 
                                 # Send confirmation
-                                await interaction.followup.send(embed=confirmation_embed, ephemeral=True)
-                                
-                                # Also send a public notification to the channel
-                                channel = self.bot_instance.bot.get_channel(self.bot_instance.submission_channel_id)
-                                if channel:
-                                    public_embed = discord.Embed(
-                                        title="❌ Submission Rejected",
-                                        description=f"A submission has been rejected by {self.user_name}.",
-                                        color=discord.Color.red()
-                                    )
-                                    public_embed.add_field(name="Wallet", value=f"`{self.wallet[:8]}...{self.wallet[-6:]}`", inline=False)
-                                    public_embed.set_footer(text=f"Rejected at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                                    await channel.send(embed=public_embed)
-                            else:
                                 await interaction.followup.send(
-                                    f"❌ Failed to reject submission for wallet `{self.wallet}`",
+                                    "✅ Review closed. Use `/job_open` to review another submission.",
                                     ephemeral=True
                                 )
                         
-                        @discord.ui.button(label="View Full Details", style=discord.ButtonStyle.secondary, emoji="👁️", row=1)
-                        async def view_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                            await interaction.response.defer()
-                            
-                            record = await self.bot_instance._get_record_details(self.wallet)
-                            
-                            if not record:
-                                await interaction.followup.send(
-                                    f"❌ Could not find details for wallet: `{self.wallet}`",
-                                    ephemeral=True
-                                )
-                                return
-                            
-                            # Create a more detailed embed
-                            full_embed = discord.Embed(
-                                title=f"📋 Full Submission Details",
-                                description=f"**{record.get('Name', 'N/A')}**",
-                                color=discord.Color.green()
-                            )
-                            
-                            # Professional Info
-                            full_embed.add_field(
-                                name="Professional Info",
-                                value=f"**Role:** {record.get('Role', 'N/A')}\n"
-                                    f"**Injective Role:** {record.get('Injective Role', 'N/A')}\n"
-                                    f"**Experience:** {record.get('Experience', 'N/A')}\n"
-                                    f"**Education:** {record.get('Education', 'N/A')}\n"
-                                    f"**Location:** {record.get('Location', 'N/A')}\n"
-                                    f"**Monthly Rate:** {record.get('Monthly Rate', 'N/A')}\n"
-                                    f"**Available:** {record.get('Availability', 'N/A')}",
-                                inline=False
-                            )
-                            
-                            # Contact info
-                            contact_info = [
-                                f"**Discord:** {record.get('Discord', '-')}",
-                                f"**Email:** {record.get('Email', '-')}",
-                                f"**Phone:** {record.get('Phone', '-')}",
-                                f"**Telegram:** {record.get('Telegram', '-')}",
-                                f"**X/Twitter:** {record.get('X', '-')}",
-                                f"**GitHub:** {record.get('Github', '-')}"
-                            ]
-                            full_embed.add_field(
-                                name="Contact Information",
-                                value="\n".join(contact_info),
-                                inline=False
-                            )
-                            
-                            # Wallet info
-                            full_embed.add_field(
-                                name="Wallet Information",
-                                value=f"**Address:** `{self.wallet}`\n"
-                                    f"**Type:** {record.get('Wallet Type', 'N/A')}\n"
-                                    f"**NFT Holdings:** {record.get('NFT Holdings', 'N/A')}\n"
-                                    f"**Token Holdings:** {record.get('Token Holdings', 'N/A')}",
-                                inline=False
-                            )
-                            
-                            # Links
-                            links = []
-                            portfolio = record.get('Portfolio', '')
-                            if portfolio and portfolio != 'N/A' and portfolio != '-':
-                                links.append(f"**Portfolio:** [Link]({portfolio})")
-                            
-                            cv = record.get('CV', '')
-                            if cv and cv != 'N/A' and cv != '-':
-                                links.append(f"**CV/Resume:** [Download]({cv})")
-                            
-                            image = record.get('Image url', '')
-                            if image and image != 'N/A' and image != '-':
-                                links.append(f"**Profile Picture:** [View]({image})")
-                            
-                            if links:
-                                full_embed.add_field(
-                                    name="Links",
-                                    value="\n".join(links),
-                                    inline=False
-                                )
-                            
-                            # Bio
-                            bio = record.get('Bio', 'No bio provided')
-                            full_embed.add_field(
-                                name="Bio",
-                                value=f"{bio[:1000]}{'...' if len(bio) > 1000 else ''}",
-                                inline=False
-                            )
-                            
-                            full_embed.set_footer(text=f"Wallet: {self.wallet[:8]}...{self.wallet[-6:]}")
-                            
-                            await interaction.followup.send(embed=full_embed, ephemeral=True)
-                        
-                        @discord.ui.button(label="Close Review", style=discord.ButtonStyle.secondary, emoji="❌", row=1)
-                        async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                            await interaction.response.defer()
-                            
-                            # Delete the review message
-                            try:
-                                await interaction.message.delete()
-                            except:
-                                pass
-                            
-                            # Send confirmation
-                            await interaction.followup.send(
-                                "✅ Review closed. Use `/job_open` to review another submission.",
+                        await interaction.followup.send(
+                            embed=detail_embed, 
+                            view=ReviewView(self.bot_instance, wallet, interaction.user.name, self.user_id),
+                            ephemeral=True
+                        )
+                
+                class SubmissionView(discord.ui.View):
+                    def __init__(self, bot_instance, records, user_id):
+                        super().__init__(timeout=180)
+                        self.add_item(SubmissionSelect(bot_instance, records, user_id))
+                        self.bot_instance = bot_instance
+                        self.user_id = user_id
+                    
+                    @discord.ui.button(label="Close Menu", style=discord.ButtonStyle.secondary, row=1)
+                    async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                        # Check if this is the same user
+                        if interaction.user.id != self.user_id:
+                            await interaction.response.send_message(
+                                "❌ This menu was opened by another user.",
                                 ephemeral=True
                             )
+                            return
+                        
+                        try:
+                            await interaction.response.defer(ephemeral=True)
+                        except discord.errors.NotFound:
+                            print(f"[CLOSE MENU] Interaction expired")
+                            return
+                        
+                        # Delete the menu message
+                        try:
+                            await interaction.message.delete()
+                        except:
+                            pass
+                        
+                        # Send confirmation
+                        await interaction.followup.send(
+                            "✅ Menu closed. Use `/job_open` to review submissions again.",
+                            ephemeral=True
+                        )
                     
-                    await interaction.followup.send(
-                        embed=detail_embed, 
-                        view=ReviewView(self.bot_instance, wallet, interaction.user.name, self.view),
-                        ephemeral=True
-                    )
-            
-            class SubmissionView(discord.ui.View):
-                def __init__(self, bot_instance, records):
-                    super().__init__(timeout=180)
-                    self.add_item(SubmissionSelect(bot_instance, records))
-                    self.bot_instance = bot_instance
+                    async def on_timeout(self):
+                        # Clean up user from active sessions when view times out
+                        self.bot_instance._active_job_open_users.discard(self.user_id)
                 
-                @discord.ui.button(label="Close Menu", style=discord.ButtonStyle.secondary, row=1)
-                async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                    await interaction.response.defer()
-                    
-                    # Delete the menu message
-                    try:
-                        await interaction.message.delete()
-                    except:
-                        pass
-                    
-                    # Send confirmation
+                view = SubmissionView(self, pending_records, user_id)
+                
+                try:
+                    # Send the menu as a new followup message
                     await interaction.followup.send(
-                        "✅ Menu closed. Use `/job_open` to review submissions again.",
+                        embed=embed,
+                        view=view,
                         ephemeral=True
                     )
-            
-            view = SubmissionView(self, pending_records)
-            original_message = await interaction.followup.send(embed=embed, view=view)
-            
+                except discord.errors.NotFound:
+                    print(f"[JOB_OPEN] Interaction expired while sending menu")
+                
         except Exception as e:
             print(f"❌ Error in job_open command: {e}")
             traceback.print_exc()
-            await interaction.followup.send(
-                "An error occurred while opening pending submissions.",
-                ephemeral=True
-            )
+            try:
+                await interaction.followup.send(
+                    "An error occurred while opening pending submissions.",
+                    ephemeral=True
+                )
+            except:
+                pass
+        finally:
+            # Always clean up user from active sessions
+            self._active_job_open_users.discard(user_id)
     
     def _ensure_excel_file(self):
         """Ensure the Excel file exists with correct headers, if not then create it."""
@@ -654,175 +1229,192 @@ class TalentHubBot:
             ws.append(headers)
             wb.save(self.excel_file)
             print(f"✅ Initialized Excel file with headers")
+            self._refresh_dataframe()
         else:
             try:
-                wb = load_workbook(self.excel_file)
-                ws = wb.active
-                expected_headers = [
-                    "Name", "Role", "Injective Role", "Experience", "Education", 
-                    "Location", "Availability", "Monthly Rate", "Skills", "Languages",
-                    "Discord", "Email", "Phone", "Telegram", "X", "Github",
-                    "Wallet Address", "Wallet Type", "NFT Holdings", "Token Holdings",
-                    "Portfolio", "CV", "Image url", "Bio", "Submission date", "Status"
-                ]
-                actual_headers = [cell.value for cell in ws[1]]
-                if actual_headers != expected_headers:
-                    print(f"📄 Excel headers mismatch. Recreating file...")
-                    os.remove(self.excel_file)
-                    self._init_excel_file()
-                wb.close()
+                # Check headers using DataFrame
+                if os.path.exists(self.excel_file):
+                    try:
+                        df = pd.read_excel(self.excel_file, nrows=0)
+                        expected_columns = [
+                            "Name", "Role", "Injective Role", "Experience", "Education", 
+                            "Location", "Availability", "Monthly Rate", "Skills", "Languages",
+                            "Discord", "Email", "Phone", "Telegram", "X", "Github",
+                            "Wallet Address", "Wallet Type", "NFT Holdings", "Token Holdings",
+                            "Portfolio", "CV", "Image url", "Bio", "Submission date", "Status"
+                        ]
+                        
+                        actual_columns = list(df.columns)
+                        if actual_columns != expected_columns:
+                            print(f"📄 Excel headers mismatch. Recreating file...")
+                            # Backup the old file
+                            backup_file = f"{self.excel_file}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                            os.rename(self.excel_file, backup_file)
+                            print(f"📄 Backup saved as: {backup_file}")
+                            
+                            # Create new file with correct headers
+                            wb = Workbook()
+                            ws = wb.active
+                            ws.title = "Submissions"
+                            ws.append(expected_columns)
+                            
+                            # Try to copy data from backup if possible
+                            try:
+                                old_df = pd.read_excel(backup_file)
+                                # Keep only columns that match
+                                for col in expected_columns:
+                                    if col in old_df.columns:
+                                        ws.append(old_df[col].tolist())
+                            except:
+                                print("⚠️ Could not copy data from backup")
+                            
+                            wb.save(self.excel_file)
+                            print(f"✅ Recreated Excel file with correct headers")
+                    except Exception as e:
+                        print(f"❌ Error verifying Excel file with DataFrame: {e}")
             except Exception as e:
                 print(f"❌ Error verifying Excel file: {e}")
-                if os.path.exists(self.excel_file):
-                    os.remove(self.excel_file)
-                self._init_excel_file()
-
-    def _init_excel_file(self):
-        """Initialize Excel file with headers"""
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Submissions"
-        
-        headers = [
-            "Name", "Role", "Injective Role", "Experience", "Education", "Location",
-            "Availability", "Monthly Rate", "Skills", "Languages", "Discord", "Email",
-            "Phone", "Telegram", "X", "Github", "Wallet Address", "Wallet Type",
-            "NFT Holdings", "Token Holdings", "Portfolio", "CV", "Image url", "Bio",
-            "Submission date", "Status"
-        ]
-        
-        ws.append(headers)
-        wb.save(self.excel_file)
-        print(f"✅ Initialized Excel file with headers")
 
     async def _find_submission_row(self, wallet_address: str) -> Optional[int]:
-        """Find the row number of a submission by wallet address."""
+        """Find the row number of a submission by wallet address using DataFrame."""
         try:
-            wb = load_workbook(self.excel_file, read_only=True)
-            ws = wb.active
+            await self._refresh_dataframe_if_needed()
             
-            for row in range(2, ws.max_row + 1):
-                cell_value = ws[f'Q{row}'].value
-                if cell_value and str(cell_value).strip().lower() == wallet_address.strip().lower():
-                    wb.close()
-                    return row
+            if self._df is None or self._df.empty:
+                return None
             
-            wb.close()
+            # Find row where Wallet Address matches
+            mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet_address.strip().lower()
+            matches = self._df[mask]
+            
+            if not matches.empty:
+                # Return the index (1-based for Excel, plus 1 for header row)
+                return matches.index[0] + 2  # +2 because Excel is 1-based and header is row 1
+            
             return None
             
         except Exception as e:
-            print(f"❌ Error searching Excel file: {e}")
-            return None
-        
+            print(f"❌ Error searching DataFrame: {e}")
+            # Fallback to old method
+            try:
+                wb = load_workbook(self.excel_file, read_only=True)
+                ws = wb.active
+                
+                for row in range(2, ws.max_row + 1):
+                    cell_value = ws[f'Q{row}'].value
+                    if cell_value and str(cell_value).strip().lower() == wallet_address.strip().lower():
+                        wb.close()
+                        return row
+                
+                wb.close()
+                return None
+                
+            except Exception as e2:
+                print(f"❌ Error searching Excel file: {e2}")
+                return None
+
     async def _get_all_records(self) -> List[Tuple[str, str]]:
-        """Get all records as a list of (Name, Wallet Address) tuples."""
+        """Get all records as a list of (Name, Wallet Address) tuples using DataFrame."""
         try:
-            wb = load_workbook(self.excel_file, read_only=True)
-            ws = wb.active
+            await self._refresh_dataframe_if_needed()
+            
+            if self._df is None or self._df.empty:
+                return []
             
             records = []
-            for row in range(2, ws.max_row + 1):
-                name = ws[f'A{row}'].value
-                wallet = ws[f'Q{row}'].value
-                if name and wallet:
-                    records.append((name, wallet))
-            wb.close()
+            for idx, row in self._df.iterrows():
+                name = row.get('Name')
+                wallet = row.get('Wallet Address')
+                if pd.notna(name) and pd.notna(wallet):
+                    records.append((str(name), str(wallet)))
+            
             return records
         except Exception as e:
             print(f"❌ Error getting all records: {e}")
             return []
     
     async def _get_pending_records(self) -> List[Tuple[str, str]]:
-        """Get only pending records as a list of (Name, Wallet Address) tuples."""
+        """Get only pending records as a list of (Name, Wallet Address) tuples using DataFrame."""
         try:
-            wb = load_workbook(self.excel_file, read_only=True)
-            ws = wb.active
+            await self._refresh_dataframe_if_needed()
+            
+            if self._df is None or self._df.empty:
+                return []
             
             records = []
-            for row in range(2, ws.max_row + 1):
-                name = ws[f'A{row}'].value
-                wallet = ws[f'Q{row}'].value
-                status = ws[f'Z{row}'].value
+            for idx, row in self._df.iterrows():
+                name = row.get('Name')
+                wallet = row.get('Wallet Address')
+                status = row.get('Status')
                 
-                if name and wallet and status == "Pending":
-                    records.append((name, wallet))
-            wb.close()
+                # Check if status is "Pending" (case-insensitive, strip whitespace)
+                if pd.notna(name) and pd.notna(wallet) and pd.notna(status):
+                    status_str = str(status).strip()
+                    if status_str.lower() == "pending":
+                        records.append((str(name), str(wallet)))
+            
+            print(f"[DATAFRAME] Found {len(records)} pending records")
             return records
         except Exception as e:
             print(f"❌ Error getting pending records: {e}")
+            traceback.print_exc()
             return []
     
     async def _get_approved_records(self) -> List[Tuple[str, str]]:
-        """Get only approved records as a list of (Name, Wallet Address) tuples."""
+        """Get only approved records as a list of (Name, Wallet Address) tuples using DataFrame."""
         try:
-            wb = load_workbook(self.excel_file, read_only=True)
-            ws = wb.active
+            await self._refresh_dataframe_if_needed()
+            
+            if self._df is None or self._df.empty:
+                return []
             
             records = []
-            for row in range(2, ws.max_row + 1):
-                name = ws[f'A{row}'].value
-                wallet = ws[f'Q{row}'].value
-                status = ws[f'Z{row}'].value
+            for idx, row in self._df.iterrows():
+                name = row.get('Name')
+                wallet = row.get('Wallet Address')
+                status = row.get('Status')
                 
-                if name and wallet and status == "Approved":
-                    records.append((name, wallet))
-            wb.close()
+                if pd.notna(name) and pd.notna(wallet) and pd.notna(status):
+                    if str(status).strip().lower() == "approved":
+                        records.append((str(name), str(wallet)))
+            
             return records
         except Exception as e:
             print(f"❌ Error getting approved records: {e}")
             return []
     
     async def _get_all_records_with_details(self) -> List[dict]:
-        """Get all records with full details as a list of dictionaries."""
+        """Get all records with full details as a list of dictionaries using DataFrame."""
         try:
-            wb = load_workbook(self.excel_file, read_only=True)
-            ws = wb.active
+            await self._refresh_dataframe_if_needed()
+            
+            if self._df is None or self._df.empty:
+                return []
             
             records = []
-            for row in range(2, ws.max_row + 1):
-                name = ws[f'A{row}'].value
-                wallet = ws[f'Q{row}'].value
+            for idx, row in self._df.iterrows():
+                name = row.get('Name')
+                wallet = row.get('Wallet Address')
                 
-                if name and wallet:
-                    record = {
-                        'Name': name,
-                        'Role': ws[f'B{row}'].value or 'N/A',
-                        'Injective Role': ws[f'C{row}'].value or 'N/A',
-                        'Experience': ws[f'D{row}'].value or 'N/A',
-                        'Education': ws[f'E{row}'].value or 'N/A',
-                        'Location': ws[f'F{row}'].value or 'N/A',
-                        'Availability': ws[f'G{row}'].value or 'N/A',
-                        'Monthly Rate': ws[f'H{row}'].value or 'N/A',
-                        'Skills': ws[f'I{row}'].value or 'N/A',
-                        'Languages': ws[f'J{row}'].value or 'N/A',
-                        'Discord': ws[f'K{row}'].value or 'N/A',
-                        'Email': ws[f'L{row}'].value or 'N/A',
-                        'Phone': ws[f'M{row}'].value or 'N/A',
-                        'Telegram': ws[f'N{row}'].value or 'N/A',
-                        'X': ws[f'O{row}'].value or 'N/A',
-                        'Github': ws[f'P{row}'].value or 'N/A',
-                        'Wallet Address': wallet,
-                        'Wallet Type': ws[f'R{row}'].value or 'N/A',
-                        'NFT Holdings': ws[f'S{row}'].value or 'N/A',
-                        'Token Holdings': ws[f'T{row}'].value or 'N/A',
-                        'Portfolio': ws[f'U{row}'].value or 'N/A',
-                        'CV': ws[f'V{row}'].value or 'N/A',
-                        'Image url': ws[f'W{row}'].value or 'N/A',
-                        'Bio': ws[f'X{row}'].value or 'N/A',
-                        'Status': ws[f'Z{row}'].value or 'Pending'
-                    }
+                if pd.notna(name) and pd.notna(wallet):
+                    record = {}
+                    for col in self._df.columns:
+                        value = row.get(col)
+                        record[col] = str(value) if pd.notna(value) else "N/A"
                     records.append(record)
-            wb.close()
+            
             return records
         except Exception as e:
             print(f"❌ Error getting all records with details: {e}")
             return []
     
     async def _get_status_counts(self) -> dict:
-        """Get counts of submissions by status."""
+        """Get counts of submissions by status using DataFrame."""
         try:
-            wb = load_workbook(self.excel_file, read_only=True)
-            ws = wb.active
+            await self._refresh_dataframe_if_needed()
+            
+            if self._df is None or self._df.empty:
+                return {'Approved': 0, 'Pending': 0, 'Rejected': 0, 'Total': 0}
             
             counts = {
                 'Approved': 0,
@@ -831,33 +1423,74 @@ class TalentHubBot:
                 'Total': 0
             }
             
-            for row in range(2, ws.max_row + 1):
-                status = ws[f'Z{row}'].value
-                if status in counts:
-                    counts[status] += 1
-                counts['Total'] += 1
+            for idx, row in self._df.iterrows():
+                status_cell = row.get('Status')
+                if pd.notna(status_cell):
+                    status = str(status_cell).strip().lower()
+                    if status == "approved":
+                        counts['Approved'] += 1
+                    elif status == "pending":
+                        counts['Pending'] += 1
+                    elif status == "rejected":
+                        counts['Rejected'] += 1
+                
+                # Always count as total if there's data in the row
+                name = row.get('Name')
+                if pd.notna(name):
+                    counts['Total'] += 1
             
-            wb.close()
+            print(f"[DATAFRAME STATUS] Approved: {counts['Approved']}, Pending: {counts['Pending']}, Rejected: {counts['Rejected']}, Total: {counts['Total']}")
             return counts
         except Exception as e:
             print(f"❌ Error getting status counts: {e}")
+            traceback.print_exc()
             return {'Approved': 0, 'Pending': 0, 'Rejected': 0, 'Total': 0}
     
     async def _delete_record(self, wallet_address: str) -> bool:
         """Delete a record from the Excel file by wallet address."""
         try:
+            # First try with DataFrame
+            await self._refresh_dataframe_if_needed()
+            
+            if self._df is not None and not self._df.empty:
+                # Find and remove the row
+                mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet_address.strip().lower()
+                if mask.any():
+                    # Remove the row
+                    self._df = self._df[~mask]
+                    
+                    # Save back to Excel
+                    await self._save_and_refresh_dataframe()
+                    print(f"✅ Deleted record for wallet: {wallet_address}")
+                    return True
+            
+            # Fallback to old method
             wb = load_workbook(self.excel_file)
             ws = wb.active
             
-            row = await self._find_submission_row(wallet_address)
-            if not row:
-                wb.close()
-                return False
+            row_found = False
+            row_to_delete = None
             
-            ws.delete_rows(row)
-            wb.save(self.excel_file)
+            for row in range(2, ws.max_row + 1):
+                cell_value = ws[f'Q{row}'].value
+                if cell_value and str(cell_value).strip().lower() == wallet_address.strip().lower():
+                    row_to_delete = row
+                    row_found = True
+                    break
+            
+            if row_found and row_to_delete:
+                ws.delete_rows(row_to_delete)
+                wb.save(self.excel_file)
+                wb.close()
+                
+                # Refresh DataFrame
+                self._refresh_dataframe()
+                
+                print(f"✅ Deleted record for wallet: {wallet_address}")
+                return True
+            
             wb.close()
-            return True
+            return False
             
         except Exception as e:
             print(f"❌ Error deleting record: {e}")
@@ -866,6 +1499,28 @@ class TalentHubBot:
     async def _update_single_field(self, wallet_address: str, column_name: str, new_value: str) -> bool:
         """Update a single field in the Excel file for a specific wallet"""
         try:
+            # First try with DataFrame
+            await self._refresh_dataframe_if_needed()
+            
+            if self._df is not None and not self._df.empty:
+                # Find the row
+                mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet_address.strip().lower()
+                if mask.any():
+                    # Update the field
+                    if column_name in self._df.columns:
+                        self._df.loc[mask, column_name] = new_value
+                        
+                        # Update submission date
+                        self._df.loc[mask, 'Submission date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        # Save back to Excel
+                        await self._save_and_refresh_dataframe()
+                        print(f"✅ Updated {column_name} for wallet: {wallet_address}")
+                        return True
+                    else:
+                        print(f"❌ Column {column_name} not found in DataFrame")
+            
+            # Fallback to old method
             column_map = {
                 'Name': 'A',
                 'Role': 'B',
@@ -911,6 +1566,10 @@ class TalentHubBot:
             
             wb.save(self.excel_file)
             wb.close()
+            
+            # Refresh DataFrame
+            self._refresh_dataframe()
+            
             return True
             
         except Exception as e:
@@ -918,42 +1577,90 @@ class TalentHubBot:
             return False
     
     async def _get_record_details(self, wallet_address: str) -> Optional[dict]:
-        """Get full details of a record by wallet address."""
+        """Get full details of a record by wallet address using DataFrame."""
         try:
-            wb = load_workbook(self.excel_file, read_only=True)
-            ws = wb.active
+            await self._refresh_dataframe_if_needed()
             
-            row = await self._find_submission_row(wallet_address)
-            if not row:
-                wb.close()
+            if self._df is None or self._df.empty:
                 return None
             
+            # Find the row
+            mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet_address.strip().lower()
+            matches = self._df[mask]
+            
+            if matches.empty:
+                return None
+            
+            # Get the first matching row
+            row = matches.iloc[0]
+            
+            # Convert to dictionary
             record = {}
-            columns = [
-                ('Name', 'A'), ('Role', 'B'), ('Injective Role', 'C'),
-                ('Experience', 'D'), ('Education', 'E'), ('Location', 'F'),
-                ('Availability', 'G'), ('Monthly Rate', 'H'), ('Skills', 'I'),
-                ('Languages', 'J'), ('Discord', 'K'), ('Email', 'L'),
-                ('Phone', 'M'), ('Telegram', 'N'), ('X', 'O'),
-                ('Github', 'P'), ('Wallet Address', 'Q'), ('Wallet Type', 'R'),
-                ('NFT Holdings', 'S'), ('Token Holdings', 'T'), ('Portfolio', 'U'),
-                ('CV', 'V'), ('Image url', 'W'), ('Bio', 'X'), ('Status', 'Z')
-            ]
+            for col in self._df.columns:
+                value = row.get(col)
+                if pd.isna(value):
+                    record[col] = "N/A"
+                else:
+                    record[col] = str(value)
             
-            for col_name, col_letter in columns:
-                value = ws[f'{col_letter}{row}'].value
-                record[col_name] = value if value is not None else "N/A"
-            
-            wb.close()
             return record
             
         except Exception as e:
             print(f"❌ Error getting record details: {e}")
-            return None
+            # Fallback to old method
+            try:
+                wb = load_workbook(self.excel_file, read_only=True)
+                ws = wb.active
+                
+                row = await self._find_submission_row(wallet_address)
+                if not row:
+                    wb.close()
+                    return None
+                
+                record = {}
+                columns = [
+                    ('Name', 'A'), ('Role', 'B'), ('Injective Role', 'C'),
+                    ('Experience', 'D'), ('Education', 'E'), ('Location', 'F'),
+                    ('Availability', 'G'), ('Monthly Rate', 'H'), ('Skills', 'I'),
+                    ('Languages', 'J'), ('Discord', 'K'), ('Email', 'L'),
+                    ('Phone', 'M'), ('Telegram', 'N'), ('X', 'O'),
+                    ('Github', 'P'), ('Wallet Address', 'Q'), ('Wallet Type', 'R'),
+                    ('NFT Holdings', 'S'), ('Token Holdings', 'T'), ('Portfolio', 'U'),
+                    ('CV', 'V'), ('Image url', 'W'), ('Bio', 'X'), ('Status', 'Z')
+                ]
+                
+                for col_name, col_letter in columns:
+                    value = ws[f'{col_letter}{row}'].value
+                    record[col_name] = value if value is not None else "N/A"
+                
+                wb.close()
+                return record
+                
+            except Exception as e2:
+                print(f"❌ Error getting record details (fallback): {e2}")
+                return None
     
     async def _update_excel_status(self, wallet_address: str, new_status: str) -> bool:
         """Update the status column in Excel for a specific wallet"""
         try:
+            # First try with DataFrame
+            await self._refresh_dataframe_if_needed()
+            
+            if self._df is not None and not self._df.empty:
+                # Find the row
+                mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet_address.strip().lower()
+                if mask.any():
+                    # Update the status
+                    self._df.loc[mask, 'Status'] = new_status
+                    
+                    # Save back to Excel
+                    await self._save_and_refresh_dataframe()
+                    print(f"✅ Updated {wallet_address} status to '{new_status}' using DataFrame")
+                    return True
+                else:
+                    print(f"[EXCEL ERROR] No row found for wallet in DataFrame: {wallet_address}")
+            
+            # Fallback to old method
             row = await self._find_submission_row(wallet_address)
             if not row:
                 print(f"[EXCEL ERROR] No row found for wallet: {wallet_address}")
@@ -969,6 +1676,9 @@ class TalentHubBot:
             wb.save(self.excel_file)
             wb.close()
             
+            # Refresh DataFrame
+            self._refresh_dataframe()
+            
             print(f"[EXCEL SUCCESS] Updated {wallet_address} status to '{new_status}'")
             return True
             
@@ -977,357 +1687,13 @@ class TalentHubBot:
             traceback.print_exc()
             return False
     
-    async def job_open_command(self, interaction: discord.Interaction):
-        """
-        Open pending submissions to review.
-        Shows dropdown with all pending submissions (name and role).
-        When selected, shows embed with details and Approve/Reject/Close buttons.
-        Updates Excel status accordingly.
-        """
-        await interaction.response.defer()
-        
-        try:
-            # Get pending submissions from Excel
-            pending_records = await self._get_pending_records()
-            
-            if not pending_records:
-                embed = discord.Embed(
-                    title="📭 Pending Submissions",
-                    description="No submissions waiting for review.",
-                    color=discord.Color.green()
-                )
-                await interaction.followup.send(embed=embed)
-                return
-            
-            # Create a selection menu
-            embed = discord.Embed(
-                title="📬 Pending Submissions",
-                description=f"Select a submission to review:",
-                color=discord.Color.blue()
-            )
-            embed.add_field(name="📋 Total Pending", value=f"{len(pending_records)} submission(s)", inline=False)
-            embed.set_footer(text="Select a submission from the dropdown below")
-            
-            # Create dropdown with pending submissions
-            class SubmissionSelect(discord.ui.Select):
-                def __init__(self, bot_instance, records):
-                    options = []
-                    for name, wallet in records[:25]:  # Discord limit: 25 options
-                        # Get role for the description - simplified to avoid blocking
-                        options.append(discord.SelectOption(
-                            label=f"{name[:90]}",
-                            description=f"Click to review",
-                            value=wallet,
-                            emoji="📄"
-                        ))
-                    
-                    super().__init__(
-                        placeholder="Choose a submission to review...",
-                        min_values=1,
-                        max_values=1,
-                        options=options
-                    )
-                    self.bot_instance = bot_instance
-                    self.records = records  # Store records for later use
-                
-                async def callback(self, interaction: discord.Interaction):
-                    await interaction.response.defer()
-                    wallet = self.values[0]
-                    
-                    # Get record details
-                    record = await self.bot_instance._get_record_details(wallet)
-                    
-                    if not record:
-                        await interaction.followup.send(
-                            f"❌ Could not find details for wallet: `{wallet}`",
-                            ephemeral=True
-                        )
-                        return
-                    
-                    # Create embed with submission details
-                    detail_embed = discord.Embed(
-                        title=f"📄 Submission Review",
-                        description=f"**{record.get('Name', 'N/A')}** - {record.get('Role', 'N/A')}",
-                        color=discord.Color.blue()
-                    )
-                    
-                    # Basic info
-                    detail_embed.add_field(
-                        name="Basic Info",
-                        value=f"**Experience:** {record.get('Experience', 'N/A')}\n"
-                            f"**Education:** {record.get('Education', 'N/A')}\n"
-                            f"**Location:** {record.get('Location', 'N/A')}\n"
-                            f"**Available:** {record.get('Availability', 'N/A')}",
-                        inline=False
-                    )
-                    
-                    # Wallet info
-                    detail_embed.add_field(
-                        name="Wallet",
-                        value=f"`{wallet}`",
-                        inline=False
-                    )
-                    
-                    # Skills
-                    skills = record.get('Skills', 'N/A')
-                    detail_embed.add_field(
-                        name="Skills",
-                        value=skills[:500] + "..." if len(skills) > 500 else skills,
-                        inline=False
-                    )
-                    
-                    # Languages
-                    languages = record.get('Languages', 'N/A')
-                    detail_embed.add_field(
-                        name="Languages",
-                        value=languages[:200] + "..." if len(languages) > 200 else languages,
-                        inline=False
-                    )
-                    
-                    detail_embed.set_footer(text=f"Wallet: {wallet[:8]}...{wallet[-6:]}")
-                    
-                    # Create review buttons
-                    class ReviewView(discord.ui.View):
-                        def __init__(self, bot_instance, wallet, user_name):
-                            super().__init__(timeout=180)
-                            self.bot_instance = bot_instance
-                            self.wallet = wallet
-                            self.user_name = user_name
-                        
-                        @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji="✅", row=0)
-                        async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                            await interaction.response.defer()
-                            
-                            success = await self.bot_instance._update_excel_status(self.wallet, "Approved")
-                            
-                            if success:
-                                await interaction.followup.send(
-                                    f"✅ Submission approved for wallet `{self.wallet}`!",
-                                    ephemeral=True
-                                )
-                                
-                                # Update original message
-                                detail_embed.title = f"✅ Submission Approved"
-                                detail_embed.color = discord.Color.green()
-                                detail_embed.set_footer(text=f"Approved by {self.user_name}")
-                                
-                                # Create new view with option to review another
-                                class AnotherView(discord.ui.View):
-                                    def __init__(self, bot_instance):
-                                        super().__init__(timeout=30)
-                                        self.bot_instance = bot_instance
-                                    
-                                    @discord.ui.button(label="Review Another", style=discord.ButtonStyle.primary)
-                                    async def another_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                                        await interaction.response.defer()
-                                        # Re-run the job_open command
-                                        await self.bot_instance.job_open_command(interaction)
-                                    
-                                    @discord.ui.button(label="Close", style=discord.ButtonStyle.secondary)
-                                    async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                                        await interaction.response.defer()
-                                        await interaction.message.delete()
-                                        await interaction.followup.send("✅ Review closed.", ephemeral=True)
-                                
-                                await interaction.message.edit(embed=detail_embed, view=AnotherView(self.bot_instance))
-                            else:
-                                await interaction.followup.send(
-                                    f"❌ Failed to approve submission for wallet `{self.wallet}`",
-                                    ephemeral=True
-                                )
-                        
-                        @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji="❌", row=0)
-                        async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                            await interaction.response.defer()
-                            
-                            success = await self.bot_instance._update_excel_status(self.wallet, "Rejected")
-                            
-                            if success:
-                                await interaction.followup.send(
-                                    f"❌ Submission rejected for wallet `{self.wallet}`!",
-                                    ephemeral=True
-                                )
-                                
-                                # Update original message
-                                detail_embed.title = f"❌ Submission Rejected"
-                                detail_embed.color = discord.Color.red()
-                                detail_embed.set_footer(text=f"Rejected by {self.user_name}")
-                                
-                                # Create new view with option to review another
-                                class AnotherView(discord.ui.View):
-                                    def __init__(self, bot_instance):
-                                        super().__init__(timeout=30)
-                                        self.bot_instance = bot_instance
-                                    
-                                    @discord.ui.button(label="Review Another", style=discord.ButtonStyle.primary)
-                                    async def another_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                                        await interaction.response.defer()
-                                        # Re-run the job_open command
-                                        await self.bot_instance.job_open_command(interaction)
-                                    
-                                    @discord.ui.button(label="Close", style=discord.ButtonStyle.secondary)
-                                    async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                                        await interaction.response.defer()
-                                        await interaction.message.delete()
-                                        await interaction.followup.send("✅ Review closed.", ephemeral=True)
-                                
-                                await interaction.message.edit(embed=detail_embed, view=AnotherView(self.bot_instance))
-                            else:
-                                await interaction.followup.send(
-                                    f"❌ Failed to reject submission for wallet `{self.wallet}`",
-                                    ephemeral=True
-                                )
-                        
-                        @discord.ui.button(label="View Full Details", style=discord.ButtonStyle.secondary, emoji="👁️", row=1)
-                        async def view_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                            await interaction.response.defer()
-                            
-                            record = await self.bot_instance._get_record_details(self.wallet)
-                            
-                            if not record:
-                                await interaction.followup.send(
-                                    f"❌ Could not find details for wallet: `{self.wallet}`",
-                                    ephemeral=True
-                                )
-                                return
-                            
-                            # Create a more detailed embed
-                            full_embed = discord.Embed(
-                                title=f"📋 Full Submission Details",
-                                description=f"**{record.get('Name', 'N/A')}**",
-                                color=discord.Color.green()
-                            )
-                            
-                            # Professional Info
-                            full_embed.add_field(
-                                name="Professional Info",
-                                value=f"**Role:** {record.get('Role', 'N/A')}\n"
-                                    f"**Injective Role:** {record.get('Injective Role', 'N/A')}\n"
-                                    f"**Experience:** {record.get('Experience', 'N/A')}\n"
-                                    f"**Education:** {record.get('Education', 'N/A')}\n"
-                                    f"**Location:** {record.get('Location', 'N/A')}\n"
-                                    f"**Monthly Rate:** {record.get('Monthly Rate', 'N/A')}\n"
-                                    f"**Available:** {record.get('Availability', 'N/A')}",
-                                inline=False
-                            )
-                            
-                            # Contact info
-                            contact_info = [
-                                f"**Discord:** {record.get('Discord', '-')}",
-                                f"**Email:** {record.get('Email', '-')}",
-                                f"**Phone:** {record.get('Phone', '-')}",
-                                f"**Telegram:** {record.get('Telegram', '-')}",
-                                f"**X/Twitter:** {record.get('X', '-')}",
-                                f"**GitHub:** {record.get('Github', '-')}"
-                            ]
-                            full_embed.add_field(
-                                name="Contact Information",
-                                value="\n".join(contact_info),
-                                inline=False
-                            )
-                            
-                            # Wallet info
-                            full_embed.add_field(
-                                name="Wallet Information",
-                                value=f"**Address:** `{self.wallet}`\n"
-                                    f"**Type:** {record.get('Wallet Type', 'N/A')}\n"
-                                    f"**NFT Holdings:** {record.get('NFT Holdings', 'N/A')}\n"
-                                    f"**Token Holdings:** {record.get('Token Holdings', 'N/A')}",
-                                inline=False
-                            )
-                            
-                            # Links
-                            links = []
-                            portfolio = record.get('Portfolio', '')
-                            if portfolio and portfolio != 'N/A' and portfolio != '-':
-                                links.append(f"**Portfolio:** [Link]({portfolio})")
-                            
-                            cv = record.get('CV', '')
-                            if cv and cv != 'N/A' and cv != '-':
-                                links.append(f"**CV/Resume:** [Download]({cv})")
-                            
-                            image = record.get('Image url', '')
-                            if image and image != 'N/A' and image != '-':
-                                links.append(f"**Profile Picture:** [View]({image})")
-                            
-                            if links:
-                                full_embed.add_field(
-                                    name="Links",
-                                    value="\n".join(links),
-                                    inline=False
-                                )
-                            
-                            # Bio
-                            bio = record.get('Bio', 'No bio provided')
-                            full_embed.add_field(
-                                name="Bio",
-                                value=f"{bio[:1000]}{'...' if len(bio) > 1000 else ''}",
-                                inline=False
-                            )
-                            
-                            full_embed.set_footer(text=f"Wallet: {self.wallet[:8]}...{self.wallet[-6:]}")
-                            
-                            await interaction.followup.send(embed=full_embed, ephemeral=True)
-                        
-                        @discord.ui.button(label="Close", style=discord.ButtonStyle.danger, emoji="❌", row=1)
-                        async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                            await interaction.response.defer()
-                            await interaction.message.delete()
-                            await interaction.followup.send("✅ Review closed.", ephemeral=True)
-                    
-                    await interaction.followup.send(
-                        embed=detail_embed, 
-                        view=ReviewView(self.bot_instance, wallet, interaction.user.name),
-                        ephemeral=True
-                    )
-            
-            class SubmissionView(discord.ui.View):
-                def __init__(self, bot_instance, records):
-                    super().__init__(timeout=180)
-                    self.add_item(SubmissionSelect(bot_instance, records))
-                
-                @discord.ui.button(label="Close Menu", style=discord.ButtonStyle.secondary, row=1)
-                async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                    await interaction.response.defer()
-                    await interaction.message.delete()
-                    await interaction.followup.send("✅ Menu closed.", ephemeral=True)
-            
-            view = SubmissionView(self, pending_records)
-            await interaction.followup.send(embed=embed, view=view)
-            
-        except Exception as e:
-            print(f"❌ Error in job_open command: {e}")
-            traceback.print_exc()
-            await interaction.followup.send(
-                "An error occurred while opening pending submissions.",
-                ephemeral=True
-            )
-            class SubmissionView(discord.ui.View):
-                def __init__(self, bot_instance, records):
-                    super().__init__(timeout=180)
-                    self.add_item(SubmissionSelect(bot_instance, records))
-                
-                @discord.ui.button(label="Close Menu", style=discord.ButtonStyle.secondary, row=1)
-                async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                    await interaction.response.defer()
-                    await interaction.message.delete()
-                    await interaction.followup.send("✅ Menu closed.", ephemeral=True)
-            
-            view = SubmissionView(self, pending_records)
-            await interaction.followup.send(embed=embed, view=view)
-            
-        except Exception as e:
-            print(f"❌ Error in job_open command: {e}")
-            traceback.print_exc()
-            await interaction.followup.send(
-                "An error occurred while opening pending submissions.",
-                ephemeral=True
-            )
-    
     async def job_open_prefix_command(self, ctx: commands.Context):
         """Open pending submissions for review (prefix command)"""
         try:
-            # Get pending submissions from Excel
+            # Refresh DataFrame first
+            await self._refresh_dataframe_if_needed()
+            
+            # Get pending submissions from DataFrame
             pending_records = await self._get_pending_records()
             
             if not pending_records:
@@ -1367,9 +1733,26 @@ class TalentHubBot:
     
     async def job_status_command(self, interaction: discord.Interaction):
         """Show current submission status, how many approved, rejected, and pending"""
-        await interaction.response.defer(ephemeral=True)
+        # Send immediate response to avoid timeout
+        try:
+            await interaction.response.send_message(
+                "🔄 Fetching status counts...",
+                ephemeral=True
+            )
+        except discord.errors.InteractionResponded:
+            print(f"[JOB_STATUS] Interaction already responded")
+            return
+        except discord.errors.NotFound:
+            print(f"[JOB_STATUS] Interaction expired")
+            return
+        except Exception as e:
+            print(f"[JOB_STATUS] Error responding: {e}")
+            return
         
         try:
+            # Refresh DataFrame first
+            await self._refresh_dataframe_if_needed()
+            
             counts = await self._get_status_counts()
             
             embed = discord.Embed(
@@ -1403,18 +1786,24 @@ class TalentHubBot:
             
             embed.set_footer(text="Use /job_open to review pending submissions")
             
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.edit_original_response(embed=embed, content=None)
             
         except Exception as e:
             print(f"❌ Error in job_status command: {e}")
-            await interaction.followup.send(
-                "An error occurred while fetching status.",
-                ephemeral=True
-            )
+            traceback.print_exc()
+            try:
+                await interaction.edit_original_response(
+                    content="An error occurred while fetching status."
+                )
+            except:
+                pass
     
     async def job_status_prefix_command(self, ctx: commands.Context):
         """Show current submission status (prefix command)"""
         try:
+            # Refresh DataFrame first
+            await self._refresh_dataframe_if_needed()
+            
             counts = await self._get_status_counts()
             
             embed = discord.Embed(
@@ -1456,13 +1845,32 @@ class TalentHubBot:
     
     async def show_command(self, interaction: discord.Interaction):
         """Show all approved submissions with pagination"""
-        await interaction.response.defer()
+        # Send immediate response to avoid timeout
+        try:
+            await interaction.response.send_message(
+                "🔄 Fetching approved submissions...",
+                ephemeral=False
+            )
+        except discord.errors.InteractionResponded:
+            print(f"[JOB_SHOW] Interaction already responded")
+            return
+        except discord.errors.NotFound:
+            print(f"[JOB_SHOW] Interaction expired")
+            return
+        except Exception as e:
+            print(f"[JOB_SHOW] Error responding: {e}")
+            return
         
         try:
+            # Refresh DataFrame first
+            await self._refresh_dataframe_if_needed()
+            
             records = await self._get_approved_records()
             
             if not records:
-                await interaction.followup.send("No approved records found in the database.")
+                await interaction.edit_original_response(
+                    content="No approved records found in the database."
+                )
                 return
             
             class PaginatedView(View):
@@ -1505,7 +1913,12 @@ class TalentHubBot:
                 
                 @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.primary, custom_id="prev", disabled=True)
                 async def previous_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.defer()
+                    try:
+                        await interaction.response.defer()
+                    except discord.errors.NotFound:
+                        print(f"[PREVIOUS] Interaction expired")
+                        return
+                    
                     if self.page > 0:
                         self.page -= 1
                         embed = self.create_embed()
@@ -1514,7 +1927,12 @@ class TalentHubBot:
                 
                 @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.primary, custom_id="next")
                 async def next_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.defer()
+                    try:
+                        await interaction.response.defer()
+                    except discord.errors.NotFound:
+                        print(f"[NEXT] Interaction expired")
+                        return
+                    
                     if self.page < self.total_pages - 1:
                         self.page += 1
                         embed = self.create_embed()
@@ -1523,7 +1941,12 @@ class TalentHubBot:
                 
                 @discord.ui.button(label="❌ Close", style=discord.ButtonStyle.danger)
                 async def close_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.defer()
+                    try:
+                        await interaction.response.defer()
+                    except discord.errors.NotFound:
+                        print(f"[CLOSE] Interaction expired")
+                        return
+                    
                     await interaction.edit_original_response(content="View closed.", embed=None, view=None)
                     self.stop()
             
@@ -1532,19 +1955,24 @@ class TalentHubBot:
             embed = view.create_embed()
             await view.update_buttons()
             
-            await interaction.followup.send(embed=embed, view=view)
+            await interaction.edit_original_response(embed=embed, view=view, content=None)
             
         except Exception as e:
             print(f"❌ Error in show command: {e}")
             traceback.print_exc()
-            await interaction.followup.send(
-                "An error occurred while fetching approved records.",
-                ephemeral=True
-            )
+            try:
+                await interaction.edit_original_response(
+                    content="An error occurred while fetching approved records."
+                )
+            except:
+                pass
     
     async def show_prefix_command(self, ctx: commands.Context):
         """Show all approved submissions (prefix command)"""
         try:
+            # Refresh DataFrame first
+            await self._refresh_dataframe_if_needed()
+            
             records = await self._get_approved_records()
             
             if not records:
@@ -1591,7 +2019,12 @@ class TalentHubBot:
                 
                 @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.primary, custom_id="prev_prefix", disabled=True)
                 async def previous_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.defer()
+                    try:
+                        await interaction.response.defer()
+                    except discord.errors.NotFound:
+                        print(f"[PREVIOUS PREFIX] Interaction expired")
+                        return
+                    
                     if self.page > 0:
                         self.page -= 1
                         embed = self.create_embed()
@@ -1600,7 +2033,12 @@ class TalentHubBot:
                 
                 @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.primary, custom_id="next_prefix")
                 async def next_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.defer()
+                    try:
+                        await interaction.response.defer()
+                    except discord.errors.NotFound:
+                        print(f"[NEXT PREFIX] Interaction expired")
+                        return
+                    
                     if self.page < self.total_pages - 1:
                         self.page += 1
                         embed = self.create_embed()
@@ -1609,7 +2047,12 @@ class TalentHubBot:
                 
                 @discord.ui.button(label="❌ Close", style=discord.ButtonStyle.danger)
                 async def close_button(self, interaction: discord.Interaction, button: Button):
-                    await interaction.response.defer()
+                    try:
+                        await interaction.response.defer()
+                    except discord.errors.NotFound:
+                        print(f"[CLOSE PREFIX] Interaction expired")
+                        return
+                    
                     await interaction.edit_original_response(content="View closed.", embed=None, view=None)
                     self.stop()
             
@@ -1626,7 +2069,21 @@ class TalentHubBot:
     
     async def change_command(self, interaction: discord.Interaction, wallet_address: str, column_name: str, new_value: str):
         """Change a specific field in a submission"""
-        await interaction.response.defer()
+        # Send immediate response to avoid timeout
+        try:
+            await interaction.response.send_message(
+                "🔄 Updating field...",
+                ephemeral=True
+            )
+        except discord.errors.InteractionResponded:
+            print(f"[CHANGE] Interaction already responded")
+            return
+        except discord.errors.NotFound:
+            print(f"[CHANGE] Interaction expired")
+            return
+        except Exception as e:
+            print(f"[CHANGE] Error responding: {e}")
+            return
         
         valid_columns = [
             'Name', 'Role', 'Injective Role', 'Experience', 'Education',
@@ -1637,22 +2094,27 @@ class TalentHubBot:
         ]
         
         if column_name not in valid_columns:
-            await interaction.followup.send(
-                f"Invalid column name. Valid columns are:\n{', '.join(valid_columns)}"
+            await interaction.edit_original_response(
+                content=f"Invalid column name. Valid columns are:\n{', '.join(valid_columns)}"
             )
             return
         
-        row = await self._find_submission_row(wallet_address)
-        if not row:
-            await interaction.followup.send(
-                f"No record found for wallet address: `{wallet_address}`"
-            )
-            return
+        # Refresh DataFrame first
+        await self._refresh_dataframe_if_needed()
+        
+        # Check if wallet exists
+        if self._df is not None and not self._df.empty:
+            mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet_address.strip().lower()
+            if not mask.any():
+                await interaction.edit_original_response(
+                    content=f"No record found for wallet address: `{wallet_address}`"
+                )
+                return
         
         record = await self._get_record_details(wallet_address)
         if not record:
-            await interaction.followup.send(
-                "Could not retrieve record details."
+            await interaction.edit_original_response(
+                content="Could not retrieve record details."
             )
             return
         
@@ -1671,10 +2133,10 @@ class TalentHubBot:
             embed.add_field(name="New Value", value=str(new_value)[:100], inline=True)
             embed.set_footer(text=f"Updated by {interaction.user.name}")
             
-            await interaction.followup.send(embed=embed)
+            await interaction.edit_original_response(embed=embed, content=None)
         else:
-            await interaction.followup.send(
-                "Failed to update the field. Please check the inputs and try again."
+            await interaction.edit_original_response(
+                content="Failed to update the field. Please check the inputs and try again."
             )
     
     async def change_prefix_command(self, ctx: commands.Context, wallet_address: str, column_name: str, new_value: str):
@@ -1693,10 +2155,15 @@ class TalentHubBot:
             )
             return
         
-        row = await self._find_submission_row(wallet_address)
-        if not row:
-            await ctx.send(f"No record found for wallet address: `{wallet_address}`")
-            return
+        # Refresh DataFrame first
+        await self._refresh_dataframe_if_needed()
+        
+        # Check if wallet exists
+        if self._df is not None and not self._df.empty:
+            mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet_address.strip().lower()
+            if not mask.any():
+                await ctx.send(f"No record found for wallet address: `{wallet_address}`")
+                return
         
         record = await self._get_record_details(wallet_address)
         if not record:
@@ -1727,19 +2194,38 @@ class TalentHubBot:
     
     async def remove_command(self, interaction: discord.Interaction, wallet_address: str):
         """Remove a submission from the Database"""
-        await interaction.response.defer()
-        
-        row = await self._find_submission_row(wallet_address)
-        if not row:
-            await interaction.followup.send(
-                f"No record found for wallet address: `{wallet_address}`"
+        # Send immediate response to avoid timeout
+        try:
+            await interaction.response.send_message(
+                "🔄 Checking record...",
+                ephemeral=True
             )
+        except discord.errors.InteractionResponded:
+            print(f"[REMOVE] Interaction already responded")
             return
+        except discord.errors.NotFound:
+            print(f"[REMOVE] Interaction expired")
+            return
+        except Exception as e:
+            print(f"[REMOVE] Error responding: {e}")
+            return
+        
+        # Refresh DataFrame first
+        await self._refresh_dataframe_if_needed()
+        
+        # Check if wallet exists
+        if self._df is not None and not self._df.empty:
+            mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet_address.strip().lower()
+            if not mask.any():
+                await interaction.edit_original_response(
+                    content=f"No record found for wallet address: `{wallet_address}`"
+                )
+                return
         
         record = await self._get_record_details(wallet_address)
         if not record:
-            await interaction.followup.send(
-                "Could not retrieve record details."
+            await interaction.edit_original_response(
+                content="Could not retrieve record details."
             )
             return
         
@@ -1763,7 +2249,12 @@ class TalentHubBot:
             
             @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger)
             async def confirm_delete(self, interaction: discord.Interaction, button: Button):
-                await interaction.response.defer()
+                try:
+                    await interaction.response.defer(ephemeral=True)
+                except discord.errors.NotFound:
+                    print(f"[CONFIRM DELETE] Interaction expired")
+                    return
+                
                 self.confirmed = True
                 
                 success = await self.bot_instance._delete_record(self.wallet)
@@ -1787,7 +2278,12 @@ class TalentHubBot:
             
             @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
             async def cancel(self, interaction: discord.Interaction, button: Button):
-                await interaction.response.defer()
+                try:
+                    await interaction.response.defer()
+                except discord.errors.NotFound:
+                    print(f"[CANCEL DELETE] Interaction expired")
+                    return
+                
                 await interaction.edit_original_response(
                     content="Deletion cancelled.",
                     embed=None,
@@ -1796,14 +2292,19 @@ class TalentHubBot:
                 self.stop()
         
         view = ConfirmView(self, wallet_address, is_slash=True)
-        await interaction.followup.send(embed=embed, view=view)
+        await interaction.edit_original_response(embed=embed, view=view, content=None)
     
     async def remove_prefix_command(self, ctx: commands.Context, wallet_address: str):
         """Remove a record by wallet address (prefix command)"""
-        row = await self._find_submission_row(wallet_address)
-        if not row:
-            await ctx.send(f"No record found for wallet address: `{wallet_address}`")
-            return
+        # Refresh DataFrame first
+        await self._refresh_dataframe_if_needed()
+        
+        # Check if wallet exists
+        if self._df is not None and not self._df.empty:
+            mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet_address.strip().lower()
+            if not mask.any():
+                await ctx.send(f"No record found for wallet address: `{wallet_address}`")
+                return
         
         record = await self._get_record_details(wallet_address)
         if not record:
@@ -1830,7 +2331,12 @@ class TalentHubBot:
             
             @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger)
             async def confirm_delete(self, interaction: discord.Interaction, button: Button):
-                await interaction.response.defer()
+                try:
+                    await interaction.response.defer(ephemeral=True)
+                except discord.errors.NotFound:
+                    print(f"[CONFIRM DELETE PREFIX] Interaction expired")
+                    return
+                
                 self.confirmed = True
                 
                 success = await self.bot_instance._delete_record(self.wallet)
@@ -1856,7 +2362,12 @@ class TalentHubBot:
             
             @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
             async def cancel(self, interaction: discord.Interaction, button: Button):
-                await interaction.response.defer()
+                try:
+                    await interaction.response.defer()
+                except discord.errors.NotFound:
+                    print(f"[CANCEL DELETE PREFIX] Interaction expired")
+                    return
+                
                 await interaction.message.edit(
                     content="Deletion cancelled.",
                     embed=None,
@@ -1870,7 +2381,21 @@ class TalentHubBot:
     
     async def column_names_command(self, interaction: discord.Interaction):
         """List all available column names for reference"""
-        await interaction.response.defer()
+        # Send immediate response to avoid timeout
+        try:
+            await interaction.response.send_message(
+                "📋 Loading column names...",
+                ephemeral=True
+            )
+        except discord.errors.InteractionResponded:
+            print(f"[COLUMN_NAMES] Interaction already responded")
+            return
+        except discord.errors.NotFound:
+            print(f"[COLUMN_NAMES] Interaction expired")
+            return
+        except Exception as e:
+            print(f"[COLUMN_NAMES] Error responding: {e}")
+            return
         
         try:
             valid_columns = [
@@ -1925,13 +2450,13 @@ class TalentHubBot:
             
             embed.set_footer(text="Use /change <wallet> <column> <value> to modify these fields")
             
-            await interaction.followup.send(embed=embed)
+            await interaction.edit_original_response(embed=embed, content=None)
             
         except Exception as e:
             print(f"❌ Error in column_names command: {e}")
             traceback.print_exc()
-            await interaction.followup.send(
-                "An error occurred while fetching column names."
+            await interaction.edit_original_response(
+                content="An error occurred while fetching column names."
             )
     
     async def column_names_prefix_command(self, ctx: commands.Context):
@@ -2002,45 +2527,55 @@ class TalentHubBot:
             
             print(f"[EXCEL SAVE] Saving submission for wallet: {wallet}")
             
-            existing_row = await self._find_submission_row(wallet)
-            if existing_row:
-                print(f"⚠️ [EXCEL SAVE] Wallet {wallet} already exists in row {existing_row}. Updating instead.")
-                return await self._update_existing_submission(data, existing_row)
+            # Refresh DataFrame first
+            await self._refresh_dataframe_if_needed()
             
-            row = [
-                data.get('name', '').strip(),
-                data.get('role', '').strip(),
-                data.get('injectiveRole', '').strip(),
-                data.get('experience', '').strip(),
-                data.get('education', '').strip(),
-                data.get('location', '').strip(),
-                'Yes' if data.get('available', False) else 'No',
-                data.get('monthlyRate', '').strip(),
-                ', '.join(data.get('skills', [])),
-                ', '.join(data.get('languages', [])),
-                data.get('discord', '').strip(),
-                data.get('email', '').strip(),
-                data.get('phone', '').strip() or '-',
-                data.get('telegram', '').strip() or '-',
-                data.get('X', '').strip() or '-',
-                data.get('github', '').strip() or '-',
-                wallet,
-                data.get('walletType', '').strip(),
-                data.get('nftHold', '').strip(),
-                data.get('tokenHold', '').strip(),
-                data.get('portfolio', '').strip() or '-',
-                data.get('cv', '').strip(),
-                data.get('profilePicture', '').strip(),
-                data.get('bio', '').strip(),
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                "Pending"
-            ]
+            # Check if wallet already exists in DataFrame
+            if self._df is not None and not self._df.empty and 'Wallet Address' in self._df.columns:
+                mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet.lower()
+                if mask.any():
+                    print(f"⚠️ [EXCEL SAVE] Wallet {wallet} already exists. Updating instead.")
+                    return await self._update_existing_submission(data)
             
-            wb = load_workbook(self.excel_file)
-            ws = wb.active
-            ws.append(row)
-            wb.save(self.excel_file)
-            wb.close()
+            # Create new row as dictionary
+            new_row = {
+                'Name': data.get('name', '').strip(),
+                'Role': data.get('role', '').strip(),
+                'Injective Role': data.get('injectiveRole', '').strip(),
+                'Experience': data.get('experience', '').strip(),
+                'Education': data.get('education', '').strip(),
+                'Location': data.get('location', '').strip(),
+                'Availability': 'Yes' if data.get('available', False) else 'No',
+                'Monthly Rate': data.get('monthlyRate', '').strip(),
+                'Skills': ', '.join(data.get('skills', [])),
+                'Languages': ', '.join(data.get('languages', [])),
+                'Discord': data.get('discord', '').strip(),
+                'Email': data.get('email', '').strip(),
+                'Phone': data.get('phone', '').strip() or '-',
+                'Telegram': data.get('telegram', '').strip() or '-',
+                'X': data.get('X', '').strip() or '-',
+                'Github': data.get('github', '').strip() or '-',
+                'Wallet Address': wallet,
+                'Wallet Type': data.get('walletType', '').strip(),
+                'NFT Holdings': data.get('nftHold', '').strip(),
+                'Token Holdings': data.get('tokenHold', '').strip(),
+                'Portfolio': data.get('portfolio', '').strip() or '-',
+                'CV': data.get('cv', '').strip(),
+                'Image url': data.get('profilePicture', '').strip(),
+                'Bio': data.get('bio', '').strip(),
+                'Submission date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'Status': "Pending"
+            }
+            
+            # Add to DataFrame
+            if self._df is None:
+                self._df = pd.DataFrame([new_row])
+            else:
+                self._df = pd.concat([self._df, pd.DataFrame([new_row])], ignore_index=True)
+            
+            # Save to Excel
+            await self._save_and_refresh_dataframe()
+            
             print(f"✅ Saved new submission to Excel for wallet: {wallet} (Status: Pending)")
             return True
             
@@ -2049,45 +2584,183 @@ class TalentHubBot:
             traceback.print_exc()
             return False
     
-    async def _update_existing_submission(self, data: dict, row: int) -> bool:
-        """Update an existing submission in Excel"""
+    def _save_new_submission_sync(self, data: dict) -> bool:
+        """Synchronous version of _save_new_submission for use when bot loop is not available"""
         try:
-            wb = load_workbook(self.excel_file)
-            ws = wb.active
+            wallet = data.get('walletAddress', '').strip()
             
-            ws[f'A{row}'] = data.get('name', '').strip()
-            ws[f'B{row}'] = data.get('role', '').strip()
-            ws[f'C{row}'] = data.get('injectiveRole', '').strip()
-            ws[f'D{row}'] = data.get('experience', '').strip()
-            ws[f'E{row}'] = data.get('education', '').strip()
-            ws[f'F{row}'] = data.get('location', '').strip()
-            ws[f'G{row}'] = 'Yes' if data.get('available', False) else 'No'
-            ws[f'H{row}'] = data.get('monthlyRate', '').strip()
-            ws[f'I{row}'] = ', '.join(data.get('skills', []))
-            ws[f'J{row}'] = ', '.join(data.get('languages', []))
-            ws[f'K{row}'] = data.get('discord', '').strip()
-            ws[f'L{row}'] = data.get('email', '').strip()
-            ws[f'M{row}'] = data.get('phone', '').strip() or '-'
-            ws[f'N{row}'] = data.get('telegram', '').strip() or '-'
-            ws[f'O{row}'] = data.get('X', '').strip() or '-'
-            ws[f'P{row}'] = data.get('github', '').strip() or '-'
-            ws[f'R{row}'] = data.get('walletType', '').strip()
-            ws[f'S{row}'] = data.get('nftHold', '').strip()
-            ws[f'T{row}'] = data.get('tokenHold', '').strip()
-            ws[f'U{row}'] = data.get('portfolio', '').strip() or '-'
-            ws[f'V{row}'] = data.get('cv', '').strip()
-            ws[f'W{row}'] = data.get('profilePicture', '').strip()
-            ws[f'X{row}'] = data.get('bio', '').strip()
-            ws[f'Y{row}'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            ws[f'Z{row}'] = "Pending"
+            print(f"[EXCEL SAVE SYNC] Saving submission for wallet: {wallet}")
             
-            wb.save(self.excel_file)
-            wb.close()
-            print(f"✅ Updated existing submission in Excel for row: {row} (Status: Pending)")
+            # Check if wallet already exists (synchronous version)
+            try:
+                if os.path.exists(self.excel_file):
+                    df = pd.read_excel(self.excel_file)
+                    if 'Wallet Address' in df.columns:
+                        mask = df['Wallet Address'].astype(str).str.strip().str.lower() == wallet.lower()
+                        if mask.any():
+                            print(f"⚠️ [EXCEL SAVE SYNC] Wallet {wallet} already exists. Updating instead.")
+                            return self._update_existing_submission_sync(data)
+            except:
+                pass
+            
+            # Create new row as dictionary
+            new_row = {
+                'Name': data.get('name', '').strip(),
+                'Role': data.get('role', '').strip(),
+                'Injective Role': data.get('injectiveRole', '').strip(),
+                'Experience': data.get('experience', '').strip(),
+                'Education': data.get('education', '').strip(),
+                'Location': data.get('location', '').strip(),
+                'Availability': 'Yes' if data.get('available', False) else 'No',
+                'Monthly Rate': data.get('monthlyRate', '').strip(),
+                'Skills': ', '.join(data.get('skills', [])),
+                'Languages': ', '.join(data.get('languages', [])),
+                'Discord': data.get('discord', '').strip(),
+                'Email': data.get('email', '').strip(),
+                'Phone': data.get('phone', '').strip() or '-',
+                'Telegram': data.get('telegram', '').strip() or '-',
+                'X': data.get('X', '').strip() or '-',
+                'Github': data.get('github', '').strip() or '-',
+                'Wallet Address': wallet,
+                'Wallet Type': data.get('walletType', '').strip(),
+                'NFT Holdings': data.get('nftHold', '').strip(),
+                'Token Holdings': data.get('tokenHold', '').strip(),
+                'Portfolio': data.get('portfolio', '').strip() or '-',
+                'CV': data.get('cv', '').strip(),
+                'Image url': data.get('profilePicture', '').strip(),
+                'Bio': data.get('bio', '').strip(),
+                'Submission date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'Status': "Pending"
+            }
+            
+            # Load existing data or create new DataFrame
+            if os.path.exists(self.excel_file):
+                df = pd.read_excel(self.excel_file)
+            else:
+                df = pd.DataFrame()
+            
+            # Add new row
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            
+            # Save to Excel
+            df.to_excel(self.excel_file, index=False)
+            
+            # Refresh the cached DataFrame
+            self._refresh_dataframe()
+            
+            print(f"✅ [EXCEL SAVE SYNC] Saved new submission to Excel for wallet: {wallet} (Status: Pending)")
+            return True
+            
+        except Exception as e:
+            print(f"❌ [EXCEL SAVE SYNC ERROR] Error saving submission to Excel: {e}")
+            traceback.print_exc()
+            return False
+    
+    async def _update_existing_submission(self, data: dict) -> bool:
+        """Update an existing submission in DataFrame"""
+        try:
+            wallet = data.get('walletAddress', '').strip()
+            
+            if self._df is None or self._df.empty:
+                return False
+            
+            # Find the row
+            mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet.lower()
+            if not mask.any():
+                return False
+            
+            # Update the row
+            self._df.loc[mask, 'Name'] = data.get('name', '').strip()
+            self._df.loc[mask, 'Role'] = data.get('role', '').strip()
+            self._df.loc[mask, 'Injective Role'] = data.get('injectiveRole', '').strip()
+            self._df.loc[mask, 'Experience'] = data.get('experience', '').strip()
+            self._df.loc[mask, 'Education'] = data.get('education', '').strip()
+            self._df.loc[mask, 'Location'] = data.get('location', '').strip()
+            self._df.loc[mask, 'Availability'] = 'Yes' if data.get('available', False) else 'No'
+            self._df.loc[mask, 'Monthly Rate'] = data.get('monthlyRate', '').strip()
+            self._df.loc[mask, 'Skills'] = ', '.join(data.get('skills', []))
+            self._df.loc[mask, 'Languages'] = ', '.join(data.get('languages', []))
+            self._df.loc[mask, 'Discord'] = data.get('discord', '').strip()
+            self._df.loc[mask, 'Email'] = data.get('email', '').strip()
+            self._df.loc[mask, 'Phone'] = data.get('phone', '').strip() or '-'
+            self._df.loc[mask, 'Telegram'] = data.get('telegram', '').strip() or '-'
+            self._df.loc[mask, 'X'] = data.get('X', '').strip() or '-'
+            self._df.loc[mask, 'Github'] = data.get('github', '').strip() or '-'
+            self._df.loc[mask, 'Wallet Type'] = data.get('walletType', '').strip()
+            self._df.loc[mask, 'NFT Holdings'] = data.get('nftHold', '').strip()
+            self._df.loc[mask, 'Token Holdings'] = data.get('tokenHold', '').strip()
+            self._df.loc[mask, 'Portfolio'] = data.get('portfolio', '').strip() or '-'
+            self._df.loc[mask, 'CV'] = data.get('cv', '').strip()
+            self._df.loc[mask, 'Image url'] = data.get('profilePicture', '').strip()
+            self._df.loc[mask, 'Bio'] = data.get('bio', '').strip()
+            self._df.loc[mask, 'Submission date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self._df.loc[mask, 'Status'] = "Pending"
+            
+            # Save to Excel
+            await self._save_and_refresh_dataframe()
+            
+            print(f"✅ Updated existing submission for wallet: {wallet}")
             return True
             
         except Exception as e:
             print(f"❌ Error updating existing submission: {e}")
+            traceback.print_exc()
+            return False
+    
+    def _update_existing_submission_sync(self, data: dict) -> bool:
+        """Synchronous version of _update_existing_submission"""
+        try:
+            wallet = data.get('walletAddress', '').strip()
+            
+            # Load the DataFrame
+            if os.path.exists(self.excel_file):
+                df = pd.read_excel(self.excel_file)
+            else:
+                return False
+            
+            # Find the row
+            mask = df['Wallet Address'].astype(str).str.strip().str.lower() == wallet.lower()
+            if not mask.any():
+                return False
+            
+            # Update the row
+            df.loc[mask, 'Name'] = data.get('name', '').strip()
+            df.loc[mask, 'Role'] = data.get('role', '').strip()
+            df.loc[mask, 'Injective Role'] = data.get('injectiveRole', '').strip()
+            df.loc[mask, 'Experience'] = data.get('experience', '').strip()
+            df.loc[mask, 'Education'] = data.get('education', '').strip()
+            df.loc[mask, 'Location'] = data.get('location', '').strip()
+            df.loc[mask, 'Availability'] = 'Yes' if data.get('available', False) else 'No'
+            df.loc[mask, 'Monthly Rate'] = data.get('monthlyRate', '').strip()
+            df.loc[mask, 'Skills'] = ', '.join(data.get('skills', []))
+            df.loc[mask, 'Languages'] = ', '.join(data.get('languages', []))
+            df.loc[mask, 'Discord'] = data.get('discord', '').strip()
+            df.loc[mask, 'Email'] = data.get('email', '').strip()
+            df.loc[mask, 'Phone'] = data.get('phone', '').strip() or '-'
+            df.loc[mask, 'Telegram'] = data.get('telegram', '').strip() or '-'
+            df.loc[mask, 'X'] = data.get('X', '').strip() or '-'
+            df.loc[mask, 'Github'] = data.get('github', '').strip() or '-'
+            df.loc[mask, 'Wallet Type'] = data.get('walletType', '').strip()
+            df.loc[mask, 'NFT Holdings'] = data.get('nftHold', '').strip()
+            df.loc[mask, 'Token Holdings'] = data.get('tokenHold', '').strip()
+            df.loc[mask, 'Portfolio'] = data.get('portfolio', '').strip() or '-'
+            df.loc[mask, 'CV'] = data.get('cv', '').strip()
+            df.loc[mask, 'Image url'] = data.get('profilePicture', '').strip()
+            df.loc[mask, 'Bio'] = data.get('bio', '').strip()
+            df.loc[mask, 'Submission date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            df.loc[mask, 'Status'] = "Pending"
+            
+            # Save to Excel
+            df.to_excel(self.excel_file, index=False)
+            
+            # Refresh the cached DataFrame
+            self._refresh_dataframe()
+            
+            print(f"✅ [EXCEL UPDATE SYNC] Updated existing submission for wallet: {wallet}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ [EXCEL UPDATE SYNC ERROR] Error updating existing submission: {e}")
             traceback.print_exc()
             return False
     
@@ -2099,45 +2772,45 @@ class TalentHubBot:
                 print(f"❌ Excel file not found: {self.excel_file}")
                 return False
             
-            # 1. Test reading without modifying
-            wb = load_workbook(self.excel_file, read_only=True)
-            ws = wb.active
-            row_count = ws.max_row
-            col_count = ws.max_column
-            print(f"📊 Excel file has {row_count} rows and {col_count} columns")
+            # Test reading with DataFrame
+            print(f"📊 Testing Excel file access with DataFrame...")
+            df = pd.read_excel(self.excel_file)
+            print(f"✅ Excel file accessible. Shape: {df.shape}")
+            print(f"   Columns: {list(df.columns)}")
+            print(f"   Rows: {len(df)}")
             
-            # Show actual headers for debugging
-            if row_count > 0:
-                headers = []
-                for col in range(1, min(col_count + 1, 30)):  # Check first 30 columns
-                    cell = ws.cell(row=1, column=col)
-                    headers.append(str(cell.value) if cell.value else "")
-                print(f"📋 Headers (first {len(headers)}): {headers}")
-            wb.close()
-            
-            # 2. Test writing by creating a backup, not modifying original
-            backup_file = f"{self.excel_file}.backup_test"
-            wb = load_workbook(self.excel_file)  # Load with write access
-            ws = wb.active
-            
-            # Count rows and columns again
-            print(f"📊 Loaded with write access: {ws.max_row} rows, {ws.max_column} columns")
-            
-            # Save to backup to test write capability
-            wb.save(backup_file)
-            wb.close()
-            
-            # Remove the backup file
-            if os.path.exists(backup_file):
-                os.remove(backup_file)
-            
-            print("✅ Excel file is accessible for reading and writing")
             return True
             
         except Exception as e:
             print(f"❌ Excel access error: {e}")
             traceback.print_exc()
             return False
+    
+    async def _debug_excel_contents(self):
+        """Debug function to print all Excel contents"""
+        try:
+            print("=" * 50)
+            print("DEBUG: Excel File Contents")
+            print("=" * 50)
+            
+            df = pd.read_excel(self.excel_file)
+            
+            print(f"Total rows: {len(df)}, Total columns: {len(df.columns)}")
+            print(f"Columns: {list(df.columns)}")
+            
+            # Print all data rows
+            for idx, row in df.iterrows():
+                print(f"\nRow {idx + 2}:")  # +2 for 1-based index and header row
+                for col in df.columns:
+                    value = row[col]
+                    value_str = str(value) if pd.notna(value) else "[EMPTY]"
+                    print(f"  {col}: {value_str}")
+            
+            print("=" * 50)
+            
+        except Exception as e:
+            print(f"❌ Error in debug_excel_contents: {e}")
+            traceback.print_exc()
     
     async def _process_new_submission(self, data: dict):
         """Process a new submission - save to Excel and notify"""
@@ -2318,42 +2991,47 @@ class TalentHubBot:
             print(f"  - Role: {data.get('role')}")
             print(f"  - Wallet: {wallet}")
             
-            # Save to Excel immediately (this doesn't need the bot to be ready)
+            # Try to wait for bot loop first (but don't wait too long)
+            bot_loop_ready = self.wait_for_bot_loop(timeout=5)
+            
             excel_success = False
-            try:
-                # Run the async save function in a new event loop
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                excel_success = loop.run_until_complete(self._save_new_submission(data))
-                loop.close()
-            except Exception as e:
-                print(f"[THREAD ERROR] Error saving to Excel: {e}")
-                traceback.print_exc()
+            
+            if bot_loop_ready and self._bot_loop:
+                # Use the bot's running event loop to save to Excel
+                print(f"[THREAD] Using bot's event loop to save to Excel")
+                try:
+                    future = asyncio.run_coroutine_threadsafe(
+                        self._save_new_submission(data),
+                        self._bot_loop
+                    )
+                    excel_success = future.result(timeout=10)
+                    print(f"✅ [THREAD] Saved to Excel via bot's loop: {wallet}")
+                except Exception as e:
+                    print(f"[THREAD ERROR] Error saving to Excel via bot loop: {e}")
+                    traceback.print_exc()
+                    # Fall back to sync method
+                    excel_success = self._save_new_submission_sync(data)
+            else:
+                # Bot loop not available yet, use sync method
+                print(f"[THREAD] Bot loop not available, saving with sync method")
+                excel_success = self._save_new_submission_sync(data)
             
             if not excel_success:
                 print(f"⚠️ [THREAD] Failed to save submission for {wallet} to Excel")
                 return False
             
-            print(f"✅ [THREAD] Saved to Excel: {wallet}")
-            
             # Queue for Discord notification
-            if self.bot and self._bot_running:
+            if self.bot and self._bot_running and self._bot_loop:
                 print(f"[THREAD] Bot is running, scheduling Discord notification")
-                # Schedule processing in bot's event loop
-                if self._bot_loop:
-                    try:
-                        asyncio.run_coroutine_threadsafe(
-                            self._process_new_submission(data),
-                            self._bot_loop
-                        )
-                        print(f"[THREAD] Discord notification scheduled")
-                    except Exception as e:
-                        print(f"[THREAD ERROR] Failed to schedule notification: {e}")
-                        traceback.print_exc()
-                        # If scheduling fails, add to queue
-                        self._thread_submission_queue.put(data)
-                else:
-                    print(f"⚠️ [THREAD] Bot loop not available, adding to queue")
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        self._process_new_submission(data),
+                        self._bot_loop
+                    )
+                    print(f"[THREAD] Discord notification scheduled")
+                except Exception as e:
+                    print(f"[THREAD ERROR] Failed to schedule notification: {e}")
+                    traceback.print_exc()
                     self._thread_submission_queue.put(data)
             else:
                 print(f"⚠️ [THREAD] Bot not ready yet, adding to queue")
@@ -2377,6 +3055,9 @@ class TalentHubBot:
             try:
                 # Wait for 1 hour (3600 seconds) between checks
                 await asyncio.sleep(3600)
+                
+                # Refresh DataFrame first
+                await self._refresh_dataframe_if_needed()
                 
                 # Get pending submissions count
                 pending_records = await self._get_pending_records()
