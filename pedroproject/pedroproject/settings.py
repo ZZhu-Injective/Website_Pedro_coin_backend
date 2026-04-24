@@ -103,11 +103,18 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     'http://68.183.1.248',
     "http://localhost:3000",
+    "https://injectivepedro.com",
     "https://www.injectivepedro.com",
     "https://www.api.injectivepedro.com",
+    "https://website-pedro-coin-4-c5aj.vercel.app",
     "https://art.injectivepedro.com",
     "https://job.injectivepedro.com",
     "https://burn.injectivepedro.com",
     "https://scam.injectivepedro.com",
     "https://board.injectivepedro.com",
+]
+
+# Allow Vercel preview deploys for this project.
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://website-pedro-coin-.*\.vercel\.app$",
 ]

@@ -33,7 +33,7 @@ class InjectiveTokenInfo:
             "cw20": "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
             "denom": "inj1fu5u29slsg2xtsj7v5la22vl4mr4ywl7wlqeck",
             "pool": "inj1r7ahhyfe35l04ffa5gnzsxjkgmnn9jkd5ds0vg",
-            "creator": "inj14ejqjy8um4p3xfqj74yld5waqljf88f9eneuk",
+            "creator": "inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk",
             "decimal": 18,
         },
         {
