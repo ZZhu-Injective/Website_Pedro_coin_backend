@@ -31,7 +31,7 @@ from .injective_login import InjectiveLogin
 from .injective_cw20_token import InjectiveCw20
 from .injective_coin_drop import CoinDrop
 from .injective_nft_drop import NFTDrop
-from .injective_checker import XLSXReader
+from .injective_checker import EligibilityChecker
 from .injective_talented import TalentDataReader
 from .injective_scam import ScamDataReader
 from .injective_scam_check import ScamChecker
@@ -437,8 +437,7 @@ async def nft_holders(request, cw20):
 
 async def checker(request, address):
     try:
-        nft = XLSXReader()
-        info = await nft.check(wallet=address)
+        info = await EligibilityChecker().check(wallet=address)
         return json_response(info)
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
