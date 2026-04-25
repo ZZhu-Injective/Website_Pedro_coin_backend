@@ -2,6 +2,7 @@ import asyncio
 from asyncio.log import logger
 import json
 import threading
+import time
 
 from dotenv import load_dotenv
 
@@ -340,13 +341,34 @@ async def Injective_cw20(request, address):
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
 
+_TOKEN_INFO_CACHE = {'data': None, 'ts': 0.0}
+_TOKEN_INFO_CACHE_TTL = 60  # seconds
+_TOKEN_INFO_LOCK = asyncio.Lock()
+
 async def token_info_view(request):
-    try:
-        token = InjectiveTokenInfo()
-        info = await token.circulation_supply()
-        return json_response(info)
-    except Exception as e:
-        return json_response({'error': str(e)}, status=500)
+    now = time.time()
+    cached = _TOKEN_INFO_CACHE['data']
+    if cached is not None and now - _TOKEN_INFO_CACHE['ts'] < _TOKEN_INFO_CACHE_TTL:
+        return json_response(cached)
+
+    async with _TOKEN_INFO_LOCK:
+        # Re-check after acquiring the lock so concurrent callers don't all refresh.
+        now = time.time()
+        cached = _TOKEN_INFO_CACHE['data']
+        if cached is not None and now - _TOKEN_INFO_CACHE['ts'] < _TOKEN_INFO_CACHE_TTL:
+            return json_response(cached)
+
+        try:
+            token = InjectiveTokenInfo()
+            info = await token.circulation_supply()
+            _TOKEN_INFO_CACHE['data'] = info
+            _TOKEN_INFO_CACHE['ts'] = time.time()
+            return json_response(info)
+        except Exception as e:
+            # Serve stale data if we have any, rather than a hard error.
+            if cached is not None:
+                return json_response(cached)
+            return json_response({'error': str(e)}, status=500)
 
 async def token_holders_view(request, native_address, cw20_address):
     try:

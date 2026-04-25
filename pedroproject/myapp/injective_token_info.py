@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import aiohttp
 from datetime import datetime
@@ -98,25 +99,39 @@ class InjectiveTokenInfo:
 
 
     async def fetch_dex_info(self):
-        async with aiohttp.ClientSession() as session:
-            for token in self.memecoin:            
-                async with session.get(f'https://api.dexscreener.com/latest/dex/pairs/injective/{token["pool"]}') as response:
-                    data = await response.json()
-                    if data['pair'] is not None:
-                        price_usd = data['pair'].get('priceUsd', 'Nan')
-                    else:
-                        price_usd = 'Nan'
+        timeout = aiohttp.ClientTimeout(total=10)
 
-                    token["price_usd"] = price_usd
+        async def fetch_one(session, token):
+            try:
+                async with session.get(
+                    f'https://api.dexscreener.com/latest/dex/pairs/injective/{token["pool"]}'
+                ) as response:
+                    data = await response.json()
+                    if data.get('pair') is not None:
+                        token['price_usd'] = data['pair'].get('priceUsd', 'Nan')
+                    else:
+                        token['price_usd'] = 'Nan'
+            except Exception:
+                token['price_usd'] = 'Nan'
+
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            await asyncio.gather(*(fetch_one(session, t) for t in self.memecoin))
 
 
     async def total_supply_native(self):
-        for token in self.memecoin:
-            if token['name'] == "Pedro" or token["name"] == "Shroom" or token["name"] == "Nonja":
+        async def fetch_one(token):
+            if token['name'] in ("Pedro", "Shroom", "Nonja"):
                 token["total_supply_native"] = 0
-            else:
+                return
+            try:
                 total_supply = await self.client.fetch_supply_of(denom=token["native"])
-                token["total_supply_native"] = str(float(total_supply["amount"]["amount"])/ 10 ** token['decimal'])
+                token["total_supply_native"] = str(
+                    float(total_supply["amount"]["amount"]) / 10 ** token['decimal']
+                )
+            except Exception:
+                token["total_supply_native"] = 0
+
+        await asyncio.gather(*(fetch_one(t) for t in self.memecoin))
 
         
     async def burn_supply_native(self):
@@ -137,50 +152,71 @@ class InjectiveTokenInfo:
     async def total_and_burn_supply_cw20(self):
         cw20_tokens = [token for token in self.memecoin if token['cw20'] != "none"]
 
-        for token in cw20_tokens:
-            total_supply = 0
-            burn_coin = 0
-            holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=PaginationOption(limit=1000))
+        async def fetch_one(token):
+            try:
+                total_supply = 0
+                burn_coin = 0
 
-            first_fetch = holders
-            while holders['pagination']['nextKey']:
-                pagination = PaginationOption(limit=1000, encoded_page_key=holders['pagination']['nextKey'])
-                holders = await self.client.fetch_all_contracts_state(address=token['cw20'], pagination=pagination)
-                first_fetch['models'] += holders['models']
-                first_fetch['pagination'] = holders['pagination']
+                holders = await self.client.fetch_all_contracts_state(
+                    address=token['cw20'], pagination=PaginationOption(limit=1000)
+                )
+                models = list(holders['models'])
+                next_key = holders.get('pagination', {}).get('nextKey')
+                while next_key:
+                    page = await self.client.fetch_all_contracts_state(
+                        address=token['cw20'],
+                        pagination=PaginationOption(limit=1000, encoded_page_key=next_key),
+                    )
+                    models += page['models']
+                    next_key = page.get('pagination', {}).get('nextKey')
 
-            for model in first_fetch['models']:
-                value_decoded = base64.b64decode(model['value']).decode('utf-8').strip('"')
-
-                if value_decoded.isdigit():
+                for model in models:
+                    value_decoded = base64.b64decode(model['value']).decode('utf-8').strip('"')
+                    if not value_decoded.isdigit():
+                        continue
                     amount_coin = float(value_decoded) / 10 ** 18
-
                     total_supply += amount_coin
-                    
                     inj_address = base64.b64decode(model['key']).decode('utf-8')[9:]
-
                     if inj_address == "inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49" or inj_address == token['cw20']:
                         burn_coin += amount_coin
 
+                token['total_supply_cw20'] = total_supply
+                token['total_burn_cw20'] = burn_coin
+            except Exception:
+                token.setdefault('total_supply_cw20', 0)
+                token.setdefault('total_burn_cw20', 0)
 
-                    token['total_supply_cw20'] = total_supply
-                    token['total_burn_cw20'] = burn_coin                      
+        await asyncio.gather(*(fetch_one(t) for t in cw20_tokens))
 
 
     async def mintable(self):
-        for token in self.memecoin:
-            metadata = await self.client.fetch_denom_authority_metadata(creator=token['creator'], sub_denom=token['denom'])
-            admin = metadata.get('authorityMetadata', {}).get('admin', '')
-            mintable = 'No' if admin == 'inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49' or admin == 'inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk' else 'Yes'
-            
-            token['mintable'] = mintable
+        async def fetch_one(token):
+            try:
+                metadata = await self.client.fetch_denom_authority_metadata(
+                    creator=token['creator'], sub_denom=token['denom']
+                )
+                admin = metadata.get('authorityMetadata', {}).get('admin', '')
+                token['mintable'] = (
+                    'No'
+                    if admin in (
+                        'inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49',
+                        'inj14ejqjyq8um4p3xfqj74yld5waqljf88f9eneuk',
+                    )
+                    else 'Yes'
+                )
+            except Exception:
+                token['mintable'] = 'Unknown'
+
+        await asyncio.gather(*(fetch_one(t) for t in self.memecoin))
 
     async def circulation_supply(self):
-        await self.fetch_dex_info()
-        await self.mintable()
-        await self.total_supply_native()
-        await self.burn_supply_native()
-        await self.total_and_burn_supply_cw20()
+        await asyncio.gather(
+            self.fetch_dex_info(),
+            self.mintable(),
+            self.total_supply_native(),
+            self.burn_supply_native(),
+            self.total_and_burn_supply_cw20(),
+        )
 
         total_market_cap = 0
 
