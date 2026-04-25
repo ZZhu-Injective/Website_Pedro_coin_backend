@@ -370,13 +370,38 @@ async def token_info_view(request):
                 return json_response(cached)
             return json_response({'error': str(e)}, status=500)
 
+_HOLDERS_CACHE = {}            # (native, cw20) -> {'data': bytes, 'ts': float}
+_HOLDERS_CACHE_TTL = 60        # seconds
+_HOLDERS_LOCKS = {}            # (native, cw20) -> asyncio.Lock
+
+def _holders_lock(key):
+    lock = _HOLDERS_LOCKS.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _HOLDERS_LOCKS[key] = lock
+    return lock
+
 async def token_holders_view(request, native_address, cw20_address):
-    try:
-        token = InjectiveHolders()
-        info = await token.fetch_holders(cw20_address=cw20_address, native_address=native_address)
-        return HttpResponse(info, content_type='application/x-msgpack')
-    except Exception as e:
-        return json_response({'error': str(e)}, status=500)
+    cache_key = (native_address, cw20_address)
+    now = time.time()
+    cached = _HOLDERS_CACHE.get(cache_key)
+    if cached is not None and now - cached['ts'] < _HOLDERS_CACHE_TTL:
+        return HttpResponse(cached['data'], content_type='application/x-msgpack')
+
+    async with _holders_lock(cache_key):
+        cached = _HOLDERS_CACHE.get(cache_key)
+        if cached is not None and time.time() - cached['ts'] < _HOLDERS_CACHE_TTL:
+            return HttpResponse(cached['data'], content_type='application/x-msgpack')
+
+        try:
+            token = InjectiveHolders()
+            info = await token.fetch_holders(cw20_address=cw20_address, native_address=native_address)
+            _HOLDERS_CACHE[cache_key] = {'data': info, 'ts': time.time()}
+            return HttpResponse(info, content_type='application/x-msgpack')
+        except Exception as e:
+            if cached is not None:
+                return HttpResponse(cached['data'], content_type='application/x-msgpack')
+            return json_response({'error': str(e)}, status=500)
 
 async def nft_holders_view(request, cw20_address):
     try:

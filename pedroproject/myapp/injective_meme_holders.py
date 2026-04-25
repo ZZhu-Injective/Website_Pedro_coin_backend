@@ -14,76 +14,76 @@ class InjectiveHolders:
         self.network = Network.mainnet()
         self.client = AsyncClient(self.network)
 
+    _SIX_DECIMAL_NATIVES = {
+        "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt",
+        "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA",
+        "factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi",
+        "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS",
+        "factory/inj18flmwwaxxqj8m8l5zl8xhjrnah98fcjp3gcy3e/XIII",
+    }
+    # base64-encoded CW20 storage prefix for the "balance" Map. Filtering on this
+    # lets us skip non-balance state (token_info, marketing_info, allowances, ...)
+    # without paying the cost of base64-decoding every value.
+    _CW20_BALANCE_KEY_PREFIX_B64 = "AAdiYWxhbmNl"
+
     async def fetch_holder_native_token(self, native_address):
-        async def fetch_page(pagination_key=None):
-            pagination = PaginationOption(limit=1000, encoded_page_key=pagination_key)
-            return await self.client.fetch_denom_owners(denom=native_address, pagination=pagination)
+        denom_owners = []
+        next_key = None
+        while True:
+            page = await self.client.fetch_denom_owners(
+                denom=native_address,
+                pagination=PaginationOption(limit=1000, encoded_page_key=next_key),
+            )
+            if page is None:
+                break
+            denom_owners += page['denomOwners']
+            next_key = page.get('pagination', {}).get('nextKey')
+            if not next_key:
+                break
 
-        holders = await fetch_page()
-        if holders is None:
-            return
+        decimal = 6 if native_address in self._SIX_DECIMAL_NATIVES else 18
+        scale = 10 ** decimal
 
-        tasks = []
-        B = holders
+        data_wallet = []
+        for model in denom_owners:
+            value = int(model['balance']['amount']) / scale
+            if value > 0:
+                data_wallet.append({'key': model['address'], 'value': value})
 
-        while holders['pagination']['nextKey']:
-            tasks.append(fetch_page(holders['pagination']['nextKey']))
-            if len(tasks) >= 1: 
-                new_data = await asyncio.gather(*tasks)
-                for data in new_data:
-                    B['denomOwners'] += data['denomOwners']
-                    holders = data
-                tasks = []
+        return pd.DataFrame(data_wallet)
 
-        if tasks: 
-            new_data = await asyncio.gather(*tasks)
-            for data in new_data:
-                B['denomOwners'] += data['denomOwners']
-                holders = data
-
-        decimal = 6 if native_address in ["factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt",
-                                          "factory/inj1xy3kvlr4q4wdd6lrelsrw2fk2ged0any44hhwq/KIRA",
-                                          "factory/inj1cw3733laj4zj3ep5ndx2sfz0aed0u03kwt6ucc/ffi",
-                                          "factory/inj178zy7myyxewek7ka7v9hru8ycpvfnen6xeps89/DRUGS",
-                                          "factory/inj18flmwwaxxqj8m8l5zl8xhjrnah98fcjp3gcy3e/XIII"] else 18
-
-        data_wallet = [
-            {'key': model['address'], 'value': int(model['balance']['amount']) / 10 ** decimal}
-            for model in B['denomOwners']
-            if int(model['balance']['amount']) / 10 ** decimal > 0
-        ]
-
-        df_holder_native = pd.DataFrame(data_wallet)
-        
-        return df_holder_native
-    
     async def fetch_holders_cw20_token(self, cw20_address):
+        models = []
+        next_key = None
+        while True:
+            page = await self.client.fetch_all_contracts_state(
+                address=cw20_address,
+                pagination=PaginationOption(limit=1000, encoded_page_key=next_key),
+            )
+            if page is None:
+                break
+            models += page['models']
+            next_key = page.get('pagination', {}).get('nextKey')
+            if not next_key:
+                break
+
         holders_cw20_wallet = []
-        holders = await self.client.fetch_all_contracts_state(address=cw20_address, pagination=PaginationOption(limit=1000))
-
-        if holders is None:
-            return
-
-        A = holders
-        while A['pagination']['nextKey']:
-            pagination = PaginationOption(limit=1000, encoded_page_key=A['pagination']['nextKey'])
-            holders = await self.client.fetch_all_contracts_state(address=cw20_address, pagination=pagination)
-            A['models'] += holders['models']
-            A['pagination'] = holders['pagination']
-
-        for model in A['models']:
+        for model in models:
+            # Cheap filter first: skip anything that isn't a "balance" entry.
+            if not model['key'].startswith(self._CW20_BALANCE_KEY_PREFIX_B64):
+                continue
             try:
-                amount_Coin = int(base64.b64decode(model['value']).decode('utf-8').strip('"')) / 1e18
+                amount_coin = int(
+                    base64.b64decode(model['value']).decode('utf-8').strip('"')
+                ) / 1e18
+                if amount_coin == 0:
+                    continue
                 inj_address = base64.b64decode(model['key']).decode('utf-8')[9:]
-
-                if amount_Coin != 0:
-                    holders_cw20_wallet.append({'key': inj_address, 'value': amount_Coin})
-
+                holders_cw20_wallet.append({'key': inj_address, 'value': amount_coin})
             except (ValueError, json.JSONDecodeError):
                 continue
-        
-        df_holders_cw20 = pd.DataFrame(holders_cw20_wallet)
-        return df_holders_cw20
+
+        return pd.DataFrame(holders_cw20_wallet)
 
     async def fetch_holders(self, cw20_address, native_address):
         if cw20_address == "no_cw20":
@@ -95,8 +95,10 @@ class InjectiveHolders:
             df_holders_cw20 = df_holders_cw20.drop(columns=['native_value'])
             
         else:
-            df_holders_native = await self.fetch_holder_native_token(native_address)
-            df_holders_cw20 = await self.fetch_holders_cw20_token(cw20_address)
+            df_holders_native, df_holders_cw20 = await asyncio.gather(
+                self.fetch_holder_native_token(native_address),
+                self.fetch_holders_cw20_token(cw20_address),
+            )
             df_holders_cw20.rename(columns={'value': 'cw20_value'}, inplace=True)
             df_holders_native.rename(columns={'value': 'native_value'}, inplace=True)
 
@@ -153,10 +155,6 @@ class InjectiveHolders:
         top_10_sum = round(filtered_df['percentage'].nlargest(10).sum())
         top_20_sum = round(filtered_df['percentage'].nlargest(20).sum())
         top_50_sum = round(filtered_df['percentage'].nlargest(50).sum())
-
-        print(top_10_sum)
-        print(top_20_sum)
-        print(top_50_sum)
 
         if native_address == "factory/inj127l5a2wmkyvucxdlupqyac3y0v6wqfhq03ka64/qunt":
 
