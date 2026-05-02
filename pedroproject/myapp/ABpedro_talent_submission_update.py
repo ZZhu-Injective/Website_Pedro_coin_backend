@@ -3,7 +3,6 @@ import asyncio
 import discord
 from discord.ext import commands
 from discord.ui import Button, View, Select
-from openpyxl import Workbook, load_workbook
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List, Tuple, Any
 from dotenv import load_dotenv
@@ -12,8 +11,44 @@ import queue as thread_queue
 import threading
 import time
 import pandas as pd
+from asgiref.sync import sync_to_async
+
+from .models import Talent, TALENT_EXCEL_COLUMN_TO_FIELD
 
 load_dotenv()
+
+
+def _submission_to_talent_fields(data: dict) -> dict:
+    """Map a frontend submission payload (camelCase keys) into Talent model fields."""
+    return {
+        'name': data.get('name', '').strip(),
+        'role': data.get('role', '').strip(),
+        'injective_role': data.get('injectiveRole', '').strip(),
+        'experience': data.get('experience', '').strip(),
+        'education': data.get('education', '').strip(),
+        'location': data.get('location', '').strip(),
+        'availability': 'Yes' if data.get('available', False) else 'No',
+        'monthly_rate': data.get('monthlyRate', '').strip(),
+        'skills': ', '.join(data.get('skills', [])),
+        'languages': ', '.join(data.get('languages', [])),
+        'discord': data.get('discord', '').strip(),
+        'email': data.get('email', '').strip(),
+        'phone': data.get('phone', '').strip() or '-',
+        'telegram': data.get('telegram', '').strip() or '-',
+        'x': data.get('X', '').strip() or '-',
+        'github': data.get('github', '').strip() or '-',
+        'wallet_address': data.get('walletAddress', '').strip(),
+        'wallet_type': data.get('walletType', '').strip(),
+        'nft_holdings': data.get('nftHold', '').strip(),
+        'token_holdings': data.get('tokenHold', '').strip(),
+        'portfolio': data.get('portfolio', '').strip() or '-',
+        'cv': data.get('cv', '').strip(),
+        'image_url': data.get('profilePicture', '').strip(),
+        'bio': data.get('bio', '').strip(),
+        'submission_date': datetime.now(),
+        'status': 'Pending',
+    }
+
 
 class TalentHubBot:
     _instance = None
@@ -30,7 +65,6 @@ class TalentHubBot:
             return
             
         self.initialized = True
-        self.excel_file = "Atalent_submissions.xlsx"
         self.bot_code = os.getenv("DISCORD_BOT")
         
         # Initialize DataFrame cache
@@ -67,74 +101,52 @@ class TalentHubBot:
         self._lock = asyncio.Lock()
         self._thread_submission_queue = thread_queue.Queue()
         self._queue_processing = False
-        
-        self._ensure_excel_file()
-        
-        # Load initial DataFrame
+
+        # Load initial DataFrame from the Talent table.
         self._refresh_dataframe()
     
     def _refresh_dataframe(self):
-        """Refresh the DataFrame from Excel file"""
+        """Sync rebuild of self._df from the Talent table.
+        Safe to call from sync code (init, threads). Async code must use
+        _refresh_dataframe_async() to avoid Django's SynchronousOnlyOperation.
+        """
         try:
-            print(f"🔄 Refreshing DataFrame from {self.excel_file}")
-            if os.path.exists(self.excel_file):
-                # Read Excel file into DataFrame
-                self._df = pd.read_excel(self.excel_file)
-                self._df_last_refresh = datetime.now()
-
-                print(self._df.head(10))
-                print(f"✅ DataFrame refreshed. Shape: {self._df.shape}")
-                print(f"   Columns: {list(self._df.columns)}")
-                print(f"   Rows: {len(self._df)}")
-                
-                # Ensure Status column exists
-                if 'Status' not in self._df.columns:
-                    print("⚠️ Status column not found in DataFrame. Adding it...")
-                    self._df['Status'] = 'Pending'
-            else:
-                print(f"❌ Excel file not found: {self.excel_file}")
-                self._df = pd.DataFrame()
-                self._df_last_refresh = datetime.now()
+            rows = [t.to_excel_dict() for t in Talent.objects.all().iterator()]
+            self._df = pd.DataFrame(rows)
+            if 'Status' not in self._df.columns:
+                self._df['Status'] = 'Pending'
+            self._df_last_refresh = datetime.now()
+            print(f"✅ DataFrame refreshed from DB. Shape: {self._df.shape}")
         except Exception as e:
             print(f"❌ Error refreshing DataFrame: {e}")
             traceback.print_exc()
             self._df = pd.DataFrame()
             self._df_last_refresh = datetime.now()
-    
+
+    async def _refresh_dataframe_async(self):
+        """Async-safe refresh. Wraps the sync ORM call via sync_to_async."""
+        await sync_to_async(self._refresh_dataframe, thread_sensitive=True)()
+
     async def _refresh_dataframe_if_needed(self):
-        """Refresh DataFrame if it's been too long since last refresh"""
-        if self._df is None:
-            self._refresh_dataframe()
+        if self._df is None or self._df_last_refresh is None:
+            await self._refresh_dataframe_async()
             return True
-        
-        if self._df_last_refresh is None:
-            self._refresh_dataframe()
-            return True
-        
+
         time_since_refresh = (datetime.now() - self._df_last_refresh).total_seconds()
         if time_since_refresh > self._df_refresh_interval:
             print(f"🔄 DataFrame stale ({time_since_refresh:.0f}s old). Refreshing...")
-            self._refresh_dataframe()
+            await self._refresh_dataframe_async()
             return True
-        
+
         return False
-    
+
     async def _save_and_refresh_dataframe(self):
-        """Save DataFrame to Excel and refresh"""
-        try:
-            if self._df is not None and not self._df.empty:
-                # Save DataFrame to Excel
-                self._df.to_excel(self.excel_file, index=False)
-                print(f"💾 Saved DataFrame to {self.excel_file}")
-                
-                # Refresh the DataFrame to ensure consistency
-                self._refresh_dataframe()
-                return True
-        except Exception as e:
-            print(f"❌ Error saving DataFrame: {e}")
-            traceback.print_exc()
-        
-        return False
+        """Persist current self._df state to the DB and re-read.
+        Kept for backwards compatibility; individual write methods now talk to
+        the ORM directly, so this just resyncs the in-memory frame with the DB.
+        """
+        await self._refresh_dataframe_async()
+        return True
     
     def wait_for_bot_loop(self, timeout: int = 30) -> bool:
         """Wait for the bot loop to be available"""
@@ -1210,71 +1222,6 @@ class TalentHubBot:
             # Always clean up user from active sessions
             self._active_job_open_users.discard(user_id)
     
-    def _ensure_excel_file(self):
-        """Ensure the Excel file exists with correct headers, if not then create it."""
-        if not os.path.exists(self.excel_file):
-            print(f"📄 Creating new Excel file: {self.excel_file}")
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Submissions"
-            
-            headers = [
-                "Name", "Role", "Injective Role", "Experience", "Education", "Location",
-                "Availability", "Monthly Rate", "Skills", "Languages", "Discord", "Email",
-                "Phone", "Telegram", "X", "Github", "Wallet Address", "Wallet Type",
-                "NFT Holdings", "Token Holdings", "Portfolio", "CV", "Image url", "Bio",
-                "Submission date", "Status"
-            ]
-            
-            ws.append(headers)
-            wb.save(self.excel_file)
-            print(f"✅ Initialized Excel file with headers")
-            self._refresh_dataframe()
-        else:
-            try:
-                # Check headers using DataFrame
-                if os.path.exists(self.excel_file):
-                    try:
-                        df = pd.read_excel(self.excel_file, nrows=0)
-                        expected_columns = [
-                            "Name", "Role", "Injective Role", "Experience", "Education", 
-                            "Location", "Availability", "Monthly Rate", "Skills", "Languages",
-                            "Discord", "Email", "Phone", "Telegram", "X", "Github",
-                            "Wallet Address", "Wallet Type", "NFT Holdings", "Token Holdings",
-                            "Portfolio", "CV", "Image url", "Bio", "Submission date", "Status"
-                        ]
-                        
-                        actual_columns = list(df.columns)
-                        if actual_columns != expected_columns:
-                            print(f"📄 Excel headers mismatch. Recreating file...")
-                            # Backup the old file
-                            backup_file = f"{self.excel_file}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                            os.rename(self.excel_file, backup_file)
-                            print(f"📄 Backup saved as: {backup_file}")
-                            
-                            # Create new file with correct headers
-                            wb = Workbook()
-                            ws = wb.active
-                            ws.title = "Submissions"
-                            ws.append(expected_columns)
-                            
-                            # Try to copy data from backup if possible
-                            try:
-                                old_df = pd.read_excel(backup_file)
-                                # Keep only columns that match
-                                for col in expected_columns:
-                                    if col in old_df.columns:
-                                        ws.append(old_df[col].tolist())
-                            except:
-                                print("⚠️ Could not copy data from backup")
-                            
-                            wb.save(self.excel_file)
-                            print(f"✅ Recreated Excel file with correct headers")
-                    except Exception as e:
-                        print(f"❌ Error verifying Excel file with DataFrame: {e}")
-            except Exception as e:
-                print(f"❌ Error verifying Excel file: {e}")
-
     async def _find_submission_row(self, wallet_address: str) -> Optional[int]:
         """Find the row number of a submission by wallet address using DataFrame."""
         try:
@@ -1295,23 +1242,7 @@ class TalentHubBot:
             
         except Exception as e:
             print(f"❌ Error searching DataFrame: {e}")
-            # Fallback to old method
-            try:
-                wb = load_workbook(self.excel_file, read_only=True)
-                ws = wb.active
-                
-                for row in range(2, ws.max_row + 1):
-                    cell_value = ws[f'Q{row}'].value
-                    if cell_value and str(cell_value).strip().lower() == wallet_address.strip().lower():
-                        wb.close()
-                        return row
-                
-                wb.close()
-                return None
-                
-            except Exception as e2:
-                print(f"❌ Error searching Excel file: {e2}")
-                return None
+            return None
 
     async def _get_all_records(self) -> List[Tuple[str, str]]:
         """Get all records as a list of (Name, Wallet Address) tuples using DataFrame."""
@@ -1447,133 +1378,47 @@ class TalentHubBot:
             return {'Approved': 0, 'Pending': 0, 'Rejected': 0, 'Total': 0}
     
     async def _delete_record(self, wallet_address: str) -> bool:
-        """Delete a record from the Excel file by wallet address."""
+        """Delete a record by wallet address."""
         try:
-            # First try with DataFrame
-            await self._refresh_dataframe_if_needed()
-            
-            if self._df is not None and not self._df.empty:
-                # Find and remove the row
-                mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet_address.strip().lower()
-                if mask.any():
-                    # Remove the row
-                    self._df = self._df[~mask]
-                    
-                    # Save back to Excel
-                    await self._save_and_refresh_dataframe()
-                    print(f"✅ Deleted record for wallet: {wallet_address}")
-                    return True
-            
-            # Fallback to old method
-            wb = load_workbook(self.excel_file)
-            ws = wb.active
-            
-            row_found = False
-            row_to_delete = None
-            
-            for row in range(2, ws.max_row + 1):
-                cell_value = ws[f'Q{row}'].value
-                if cell_value and str(cell_value).strip().lower() == wallet_address.strip().lower():
-                    row_to_delete = row
-                    row_found = True
-                    break
-            
-            if row_found and row_to_delete:
-                ws.delete_rows(row_to_delete)
-                wb.save(self.excel_file)
-                wb.close()
-                
-                # Refresh DataFrame
-                self._refresh_dataframe()
-                
-                print(f"✅ Deleted record for wallet: {wallet_address}")
-                return True
-            
-            wb.close()
-            return False
-            
+            deleted, _ = await Talent.objects.filter(
+                wallet_address__iexact=wallet_address.strip()
+            ).adelete()
+
+            if deleted == 0:
+                return False
+
+            await self._refresh_dataframe_async()
+            print(f"✅ Deleted record for wallet: {wallet_address}")
+            return True
+
         except Exception as e:
             print(f"❌ Error deleting record: {e}")
+            traceback.print_exc()
             return False
     
     async def _update_single_field(self, wallet_address: str, column_name: str, new_value: str) -> bool:
-        """Update a single field in the Excel file for a specific wallet"""
+        """Update a single field for a wallet. column_name is an Excel-style display name."""
         try:
-            # First try with DataFrame
-            await self._refresh_dataframe_if_needed()
-            
-            if self._df is not None and not self._df.empty:
-                # Find the row
-                mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet_address.strip().lower()
-                if mask.any():
-                    # Update the field
-                    if column_name in self._df.columns:
-                        self._df.loc[mask, column_name] = new_value
-                        
-                        # Update submission date
-                        self._df.loc[mask, 'Submission date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        
-                        # Save back to Excel
-                        await self._save_and_refresh_dataframe()
-                        print(f"✅ Updated {column_name} for wallet: {wallet_address}")
-                        return True
-                    else:
-                        print(f"❌ Column {column_name} not found in DataFrame")
-            
-            # Fallback to old method
-            column_map = {
-                'Name': 'A',
-                'Role': 'B',
-                'Injective Role': 'C',
-                'Experience': 'D',
-                'Education': 'E',
-                'Location': 'F',
-                'Availability': 'G',
-                'Monthly Rate': 'H',
-                'Skills': 'I',
-                'Languages': 'J',
-                'Discord': 'K',
-                'Email': 'L',
-                'Phone': 'M',
-                'Telegram': 'N',
-                'X': 'O',
-                'Github': 'P',
-                'Wallet Type': 'R',
-                'NFT Holdings': 'S',
-                'Token Holdings': 'T',
-                'Portfolio': 'U',
-                'CV': 'V',
-                'Image url': 'W',
-                'Bio': 'X',
-                'Status': 'Z'
-            }
-            
-            if column_name not in column_map:
+            field = TALENT_EXCEL_COLUMN_TO_FIELD.get(column_name)
+            if field is None:
+                print(f"❌ Unknown column: {column_name}")
                 return False
-            
-            wb = load_workbook(self.excel_file)
-            ws = wb.active
-            
-            row = await self._find_submission_row(wallet_address)
-            if not row:
-                wb.close()
+
+            updated = await Talent.objects.filter(
+                wallet_address__iexact=wallet_address.strip()
+            ).aupdate(**{field: new_value, 'submission_date': datetime.now()})
+
+            if updated == 0:
+                print(f"❌ No row found for wallet: {wallet_address}")
                 return False
-            
-            col = column_map[column_name]
-            ws[f'{col}{row}'] = new_value
-            
-            ws[f'Y{row}'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            wb.save(self.excel_file)
-            wb.close()
-            
-            # Refresh DataFrame
-            self._refresh_dataframe()
-            
+
+            await self._refresh_dataframe_async()
+            print(f"✅ Updated {column_name} for wallet: {wallet_address}")
             return True
-            
+
         except Exception as e:
             print(f"❌ Error updating field: {e}")
+            traceback.print_exc()
             return False
     
     async def _get_record_details(self, wallet_address: str) -> Optional[dict]:
@@ -1607,83 +1452,26 @@ class TalentHubBot:
             
         except Exception as e:
             print(f"❌ Error getting record details: {e}")
-            # Fallback to old method
-            try:
-                wb = load_workbook(self.excel_file, read_only=True)
-                ws = wb.active
-                
-                row = await self._find_submission_row(wallet_address)
-                if not row:
-                    wb.close()
-                    return None
-                
-                record = {}
-                columns = [
-                    ('Name', 'A'), ('Role', 'B'), ('Injective Role', 'C'),
-                    ('Experience', 'D'), ('Education', 'E'), ('Location', 'F'),
-                    ('Availability', 'G'), ('Monthly Rate', 'H'), ('Skills', 'I'),
-                    ('Languages', 'J'), ('Discord', 'K'), ('Email', 'L'),
-                    ('Phone', 'M'), ('Telegram', 'N'), ('X', 'O'),
-                    ('Github', 'P'), ('Wallet Address', 'Q'), ('Wallet Type', 'R'),
-                    ('NFT Holdings', 'S'), ('Token Holdings', 'T'), ('Portfolio', 'U'),
-                    ('CV', 'V'), ('Image url', 'W'), ('Bio', 'X'), ('Status', 'Z')
-                ]
-                
-                for col_name, col_letter in columns:
-                    value = ws[f'{col_letter}{row}'].value
-                    record[col_name] = value if value is not None else "N/A"
-                
-                wb.close()
-                return record
-                
-            except Exception as e2:
-                print(f"❌ Error getting record details (fallback): {e2}")
-                return None
+            traceback.print_exc()
+            return None
     
     async def _update_excel_status(self, wallet_address: str, new_status: str) -> bool:
-        """Update the status column in Excel for a specific wallet"""
+        """Update the status field for a specific wallet."""
         try:
-            # First try with DataFrame
-            await self._refresh_dataframe_if_needed()
-            
-            if self._df is not None and not self._df.empty:
-                # Find the row
-                mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet_address.strip().lower()
-                if mask.any():
-                    # Update the status
-                    self._df.loc[mask, 'Status'] = new_status
-                    
-                    # Save back to Excel
-                    await self._save_and_refresh_dataframe()
-                    print(f"✅ Updated {wallet_address} status to '{new_status}' using DataFrame")
-                    return True
-                else:
-                    print(f"[EXCEL ERROR] No row found for wallet in DataFrame: {wallet_address}")
-            
-            # Fallback to old method
-            row = await self._find_submission_row(wallet_address)
-            if not row:
-                print(f"[EXCEL ERROR] No row found for wallet: {wallet_address}")
+            updated = await Talent.objects.filter(
+                wallet_address__iexact=wallet_address.strip()
+            ).aupdate(status=new_status)
+
+            if updated == 0:
+                print(f"[DB ERROR] No row found for wallet: {wallet_address}")
                 return False
-            
-            wb = load_workbook(self.excel_file)
-            ws = wb.active
-            
-            # Update the status
-            ws[f'Z{row}'] = new_status
-            
-            # Save the file
-            wb.save(self.excel_file)
-            wb.close()
-            
-            # Refresh DataFrame
-            self._refresh_dataframe()
-            
-            print(f"[EXCEL SUCCESS] Updated {wallet_address} status to '{new_status}'")
+
+            await self._refresh_dataframe_async()
+            print(f"[DB SUCCESS] Updated {wallet_address} status to '{new_status}'")
             return True
-            
+
         except Exception as e:
-            print(f"[EXCEL ERROR] Error updating Excel status: {e}")
+            print(f"[DB ERROR] Error updating status: {e}")
             traceback.print_exc()
             return False
     
@@ -2521,295 +2309,128 @@ class TalentHubBot:
             await ctx.send("An error occurred while fetching column names.")
     
     async def _save_new_submission(self, data: dict) -> bool:
-        """Save a new submission to Excel with status "Pending" (not "Queued")"""
+        """Insert a new Talent row (or update if wallet already exists)."""
         try:
             wallet = data.get('walletAddress', '').strip()
-            
-            print(f"[EXCEL SAVE] Saving submission for wallet: {wallet}")
-            
-            # Refresh DataFrame first
-            await self._refresh_dataframe_if_needed()
-            
-            # Check if wallet already exists in DataFrame
-            if self._df is not None and not self._df.empty and 'Wallet Address' in self._df.columns:
-                mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet.lower()
-                if mask.any():
-                    print(f"⚠️ [EXCEL SAVE] Wallet {wallet} already exists. Updating instead.")
-                    return await self._update_existing_submission(data)
-            
-            # Create new row as dictionary
-            new_row = {
-                'Name': data.get('name', '').strip(),
-                'Role': data.get('role', '').strip(),
-                'Injective Role': data.get('injectiveRole', '').strip(),
-                'Experience': data.get('experience', '').strip(),
-                'Education': data.get('education', '').strip(),
-                'Location': data.get('location', '').strip(),
-                'Availability': 'Yes' if data.get('available', False) else 'No',
-                'Monthly Rate': data.get('monthlyRate', '').strip(),
-                'Skills': ', '.join(data.get('skills', [])),
-                'Languages': ', '.join(data.get('languages', [])),
-                'Discord': data.get('discord', '').strip(),
-                'Email': data.get('email', '').strip(),
-                'Phone': data.get('phone', '').strip() or '-',
-                'Telegram': data.get('telegram', '').strip() or '-',
-                'X': data.get('X', '').strip() or '-',
-                'Github': data.get('github', '').strip() or '-',
-                'Wallet Address': wallet,
-                'Wallet Type': data.get('walletType', '').strip(),
-                'NFT Holdings': data.get('nftHold', '').strip(),
-                'Token Holdings': data.get('tokenHold', '').strip(),
-                'Portfolio': data.get('portfolio', '').strip() or '-',
-                'CV': data.get('cv', '').strip(),
-                'Image url': data.get('profilePicture', '').strip(),
-                'Bio': data.get('bio', '').strip(),
-                'Submission date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'Status': "Pending"
-            }
-            
-            # Add to DataFrame
-            if self._df is None:
-                self._df = pd.DataFrame([new_row])
-            else:
-                self._df = pd.concat([self._df, pd.DataFrame([new_row])], ignore_index=True)
-            
-            # Save to Excel
-            await self._save_and_refresh_dataframe()
-            
-            print(f"✅ Saved new submission to Excel for wallet: {wallet} (Status: Pending)")
+            print(f"[DB SAVE] Saving submission for wallet: {wallet}")
+
+            existing = await Talent.objects.filter(wallet_address__iexact=wallet).afirst()
+            if existing is not None:
+                print(f"⚠️ [DB SAVE] Wallet {wallet} already exists. Updating instead.")
+                return await self._update_existing_submission(data)
+
+            fields = _submission_to_talent_fields(data)
+            await Talent.objects.acreate(**fields)
+
+            await self._refresh_dataframe_async()
+
+            print(f"✅ Saved new submission for wallet: {wallet} (Status: Pending)")
             return True
-            
+
         except Exception as e:
-            print(f"❌ Error saving submission to Excel: {e}")
+            print(f"❌ Error saving submission: {e}")
             traceback.print_exc()
             return False
-    
+
     def _save_new_submission_sync(self, data: dict) -> bool:
-        """Synchronous version of _save_new_submission for use when bot loop is not available"""
+        """Sync variant called from threads without an event loop."""
         try:
             wallet = data.get('walletAddress', '').strip()
-            
-            print(f"[EXCEL SAVE SYNC] Saving submission for wallet: {wallet}")
-            
-            # Check if wallet already exists (synchronous version)
-            try:
-                if os.path.exists(self.excel_file):
-                    df = pd.read_excel(self.excel_file)
-                    if 'Wallet Address' in df.columns:
-                        mask = df['Wallet Address'].astype(str).str.strip().str.lower() == wallet.lower()
-                        if mask.any():
-                            print(f"⚠️ [EXCEL SAVE SYNC] Wallet {wallet} already exists. Updating instead.")
-                            return self._update_existing_submission_sync(data)
-            except:
-                pass
-            
-            # Create new row as dictionary
-            new_row = {
-                'Name': data.get('name', '').strip(),
-                'Role': data.get('role', '').strip(),
-                'Injective Role': data.get('injectiveRole', '').strip(),
-                'Experience': data.get('experience', '').strip(),
-                'Education': data.get('education', '').strip(),
-                'Location': data.get('location', '').strip(),
-                'Availability': 'Yes' if data.get('available', False) else 'No',
-                'Monthly Rate': data.get('monthlyRate', '').strip(),
-                'Skills': ', '.join(data.get('skills', [])),
-                'Languages': ', '.join(data.get('languages', [])),
-                'Discord': data.get('discord', '').strip(),
-                'Email': data.get('email', '').strip(),
-                'Phone': data.get('phone', '').strip() or '-',
-                'Telegram': data.get('telegram', '').strip() or '-',
-                'X': data.get('X', '').strip() or '-',
-                'Github': data.get('github', '').strip() or '-',
-                'Wallet Address': wallet,
-                'Wallet Type': data.get('walletType', '').strip(),
-                'NFT Holdings': data.get('nftHold', '').strip(),
-                'Token Holdings': data.get('tokenHold', '').strip(),
-                'Portfolio': data.get('portfolio', '').strip() or '-',
-                'CV': data.get('cv', '').strip(),
-                'Image url': data.get('profilePicture', '').strip(),
-                'Bio': data.get('bio', '').strip(),
-                'Submission date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'Status': "Pending"
-            }
-            
-            # Load existing data or create new DataFrame
-            if os.path.exists(self.excel_file):
-                df = pd.read_excel(self.excel_file)
-            else:
-                df = pd.DataFrame()
-            
-            # Add new row
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-            
-            # Save to Excel
-            df.to_excel(self.excel_file, index=False)
-            
-            # Refresh the cached DataFrame
+            print(f"[DB SAVE SYNC] Saving submission for wallet: {wallet}")
+
+            if Talent.objects.filter(wallet_address__iexact=wallet).exists():
+                print(f"⚠️ [DB SAVE SYNC] Wallet {wallet} already exists. Updating instead.")
+                return self._update_existing_submission_sync(data)
+
+            fields = _submission_to_talent_fields(data)
+            Talent.objects.create(**fields)
+
             self._refresh_dataframe()
-            
-            print(f"✅ [EXCEL SAVE SYNC] Saved new submission to Excel for wallet: {wallet} (Status: Pending)")
+
+            print(f"✅ [DB SAVE SYNC] Saved new submission for wallet: {wallet} (Status: Pending)")
             return True
-            
+
         except Exception as e:
-            print(f"❌ [EXCEL SAVE SYNC ERROR] Error saving submission to Excel: {e}")
+            print(f"❌ [DB SAVE SYNC ERROR] Error saving submission: {e}")
             traceback.print_exc()
             return False
     
     async def _update_existing_submission(self, data: dict) -> bool:
-        """Update an existing submission in DataFrame"""
+        """Update an existing Talent row by wallet."""
         try:
             wallet = data.get('walletAddress', '').strip()
-            
-            if self._df is None or self._df.empty:
+            fields = _submission_to_talent_fields(data)
+            # wallet_address shouldn't be overwritten on update.
+            fields.pop('wallet_address', None)
+
+            updated = await Talent.objects.filter(
+                wallet_address__iexact=wallet
+            ).aupdate(**fields)
+
+            if updated == 0:
                 return False
-            
-            # Find the row
-            mask = self._df['Wallet Address'].astype(str).str.strip().str.lower() == wallet.lower()
-            if not mask.any():
-                return False
-            
-            # Update the row
-            self._df.loc[mask, 'Name'] = data.get('name', '').strip()
-            self._df.loc[mask, 'Role'] = data.get('role', '').strip()
-            self._df.loc[mask, 'Injective Role'] = data.get('injectiveRole', '').strip()
-            self._df.loc[mask, 'Experience'] = data.get('experience', '').strip()
-            self._df.loc[mask, 'Education'] = data.get('education', '').strip()
-            self._df.loc[mask, 'Location'] = data.get('location', '').strip()
-            self._df.loc[mask, 'Availability'] = 'Yes' if data.get('available', False) else 'No'
-            self._df.loc[mask, 'Monthly Rate'] = data.get('monthlyRate', '').strip()
-            self._df.loc[mask, 'Skills'] = ', '.join(data.get('skills', []))
-            self._df.loc[mask, 'Languages'] = ', '.join(data.get('languages', []))
-            self._df.loc[mask, 'Discord'] = data.get('discord', '').strip()
-            self._df.loc[mask, 'Email'] = data.get('email', '').strip()
-            self._df.loc[mask, 'Phone'] = data.get('phone', '').strip() or '-'
-            self._df.loc[mask, 'Telegram'] = data.get('telegram', '').strip() or '-'
-            self._df.loc[mask, 'X'] = data.get('X', '').strip() or '-'
-            self._df.loc[mask, 'Github'] = data.get('github', '').strip() or '-'
-            self._df.loc[mask, 'Wallet Type'] = data.get('walletType', '').strip()
-            self._df.loc[mask, 'NFT Holdings'] = data.get('nftHold', '').strip()
-            self._df.loc[mask, 'Token Holdings'] = data.get('tokenHold', '').strip()
-            self._df.loc[mask, 'Portfolio'] = data.get('portfolio', '').strip() or '-'
-            self._df.loc[mask, 'CV'] = data.get('cv', '').strip()
-            self._df.loc[mask, 'Image url'] = data.get('profilePicture', '').strip()
-            self._df.loc[mask, 'Bio'] = data.get('bio', '').strip()
-            self._df.loc[mask, 'Submission date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            self._df.loc[mask, 'Status'] = "Pending"
-            
-            # Save to Excel
-            await self._save_and_refresh_dataframe()
-            
+
+            await self._refresh_dataframe_async()
+
             print(f"✅ Updated existing submission for wallet: {wallet}")
             return True
-            
+
         except Exception as e:
             print(f"❌ Error updating existing submission: {e}")
             traceback.print_exc()
             return False
-    
+
     def _update_existing_submission_sync(self, data: dict) -> bool:
-        """Synchronous version of _update_existing_submission"""
+        """Sync variant called from threads without an event loop."""
         try:
             wallet = data.get('walletAddress', '').strip()
-            
-            # Load the DataFrame
-            if os.path.exists(self.excel_file):
-                df = pd.read_excel(self.excel_file)
-            else:
+            fields = _submission_to_talent_fields(data)
+            fields.pop('wallet_address', None)
+
+            updated = Talent.objects.filter(
+                wallet_address__iexact=wallet
+            ).update(**fields)
+
+            if updated == 0:
                 return False
-            
-            # Find the row
-            mask = df['Wallet Address'].astype(str).str.strip().str.lower() == wallet.lower()
-            if not mask.any():
-                return False
-            
-            # Update the row
-            df.loc[mask, 'Name'] = data.get('name', '').strip()
-            df.loc[mask, 'Role'] = data.get('role', '').strip()
-            df.loc[mask, 'Injective Role'] = data.get('injectiveRole', '').strip()
-            df.loc[mask, 'Experience'] = data.get('experience', '').strip()
-            df.loc[mask, 'Education'] = data.get('education', '').strip()
-            df.loc[mask, 'Location'] = data.get('location', '').strip()
-            df.loc[mask, 'Availability'] = 'Yes' if data.get('available', False) else 'No'
-            df.loc[mask, 'Monthly Rate'] = data.get('monthlyRate', '').strip()
-            df.loc[mask, 'Skills'] = ', '.join(data.get('skills', []))
-            df.loc[mask, 'Languages'] = ', '.join(data.get('languages', []))
-            df.loc[mask, 'Discord'] = data.get('discord', '').strip()
-            df.loc[mask, 'Email'] = data.get('email', '').strip()
-            df.loc[mask, 'Phone'] = data.get('phone', '').strip() or '-'
-            df.loc[mask, 'Telegram'] = data.get('telegram', '').strip() or '-'
-            df.loc[mask, 'X'] = data.get('X', '').strip() or '-'
-            df.loc[mask, 'Github'] = data.get('github', '').strip() or '-'
-            df.loc[mask, 'Wallet Type'] = data.get('walletType', '').strip()
-            df.loc[mask, 'NFT Holdings'] = data.get('nftHold', '').strip()
-            df.loc[mask, 'Token Holdings'] = data.get('tokenHold', '').strip()
-            df.loc[mask, 'Portfolio'] = data.get('portfolio', '').strip() or '-'
-            df.loc[mask, 'CV'] = data.get('cv', '').strip()
-            df.loc[mask, 'Image url'] = data.get('profilePicture', '').strip()
-            df.loc[mask, 'Bio'] = data.get('bio', '').strip()
-            df.loc[mask, 'Submission date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            df.loc[mask, 'Status'] = "Pending"
-            
-            # Save to Excel
-            df.to_excel(self.excel_file, index=False)
-            
-            # Refresh the cached DataFrame
+
             self._refresh_dataframe()
-            
-            print(f"✅ [EXCEL UPDATE SYNC] Updated existing submission for wallet: {wallet}")
+
+            print(f"✅ [DB UPDATE SYNC] Updated existing submission for wallet: {wallet}")
             return True
-            
+
         except Exception as e:
-            print(f"❌ [EXCEL UPDATE SYNC ERROR] Error updating existing submission: {e}")
+            print(f"❌ [DB UPDATE SYNC ERROR] Error updating existing submission: {e}")
             traceback.print_exc()
             return False
     
     async def _test_excel_access(self):
-        """Test if we can read/write to Excel file without modifying it"""
+        """Sanity-check the Talent table is reachable."""
         try:
-            # First, check if file exists
-            if not os.path.exists(self.excel_file):
-                print(f"❌ Excel file not found: {self.excel_file}")
-                return False
-            
-            # Test reading with DataFrame
-            print(f"📊 Testing Excel file access with DataFrame...")
-            df = pd.read_excel(self.excel_file)
-            print(f"✅ Excel file accessible. Shape: {df.shape}")
-            print(f"   Columns: {list(df.columns)}")
-            print(f"   Rows: {len(df)}")
-            
+            count = await Talent.objects.acount()
+            print(f"✅ Talent table reachable. Rows: {count}")
             return True
-            
         except Exception as e:
-            print(f"❌ Excel access error: {e}")
+            print(f"❌ Talent table access error: {e}")
             traceback.print_exc()
             return False
-    
+
     async def _debug_excel_contents(self):
-        """Debug function to print all Excel contents"""
+        """Debug helper: print all Talent rows from the DB."""
         try:
             print("=" * 50)
-            print("DEBUG: Excel File Contents")
+            print("DEBUG: Talent table contents")
             print("=" * 50)
-            
-            df = pd.read_excel(self.excel_file)
-            
-            print(f"Total rows: {len(df)}, Total columns: {len(df.columns)}")
-            print(f"Columns: {list(df.columns)}")
-            
-            # Print all data rows
-            for idx, row in df.iterrows():
-                print(f"\nRow {idx + 2}:")  # +2 for 1-based index and header row
-                for col in df.columns:
-                    value = row[col]
-                    value_str = str(value) if pd.notna(value) else "[EMPTY]"
-                    print(f"  {col}: {value_str}")
-            
+            count = 0
+            async for t in Talent.objects.all():
+                count += 1
+                print(f"\nRow {count}:")
+                for col, val in t.to_excel_dict().items():
+                    print(f"  {col}: {val if val else '[EMPTY]'}")
+            print(f"\nTotal rows: {count}")
             print("=" * 50)
-            
         except Exception as e:
-            print(f"❌ Error in debug_excel_contents: {e}")
+            print(f"❌ Error in _debug_excel_contents: {e}")
             traceback.print_exc()
     
     async def _process_new_submission(self, data: dict):

@@ -1,46 +1,44 @@
 import asyncio
 import aiohttp
-import json
-import os
 from typing import Dict, List, Optional
 from pyinjective.core.network import Network
 from pyinjective.async_client import AsyncClient
 import backoff
 
+from .models import VerifiedToken
+
 class TokenVerifier:
-    
+
     def __init__(self, address: str):
         self.address = address
         self.network = Network.mainnet()
         self.client = AsyncClient(self.network)
         self.session = aiohttp.ClientSession()
         self.semaphore = asyncio.Semaphore(10)
-        self.verified_tokens = self._load_verified_tokens()
+        self.verified_tokens: List[Dict] = []
 
-    def _load_verified_tokens(self) -> List[Dict]:
-        possible_filenames = [
-            'ACpedro_verified_token.json',
-            'ACpedro_verifeid_token.json',
-            os.path.join('pedroproject', 'myapp', 'ACpedro_verified_token.json'),
-            os.path.join(os.path.dirname(__file__), 'ACpedro_verified_token.json')
+    async def _ensure_tokens_loaded(self) -> None:
+        if self.verified_tokens:
+            return
+        # Map snake_case model fields back to the camelCase keys the rest of
+        # this class expects, so _find_verified_token stays unchanged.
+        self.verified_tokens = [
+            {
+                'denom': t.denom,
+                'address': t.address,
+                'isNative': t.is_native,
+                'tokenVerification': t.token_verification,
+                'name': t.name,
+                'decimals': t.decimals,
+                'symbol': t.symbol,
+                'overrideSymbol': t.override_symbol,
+                'logo': t.logo,
+                'coinGeckoId': t.coin_gecko_id,
+                'tokenType': t.token_type,
+                'externalLogo': t.external_logo,
+            }
+            async for t in VerifiedToken.objects.all()
         ]
-        
-        for filename in possible_filenames:
-            try:
-                if os.path.exists(filename):
-                    print(f"Loading verified tokens from: {filename}")
-                    with open(filename, 'r', encoding='utf-8') as f:
-                        tokens = json.load(f)
-                        if not isinstance(tokens, list):
-                            print(f"Warning: Expected list in {filename}, got {type(tokens)}")
-                            continue
-                        return tokens
-            except Exception as e:
-                print(f"Error loading {filename}: {str(e)}")
-                continue
-        
-        print("Warning: Could not load verified tokens file")
-        return []
 
     @backoff.on_exception(backoff.expo, Exception, max_tries=5)
     async def _fetch_balances(self) -> Dict:
@@ -158,6 +156,7 @@ class TokenVerifier:
             return amount
 
     async def get_balances(self) -> Dict:
+        await self._ensure_tokens_loaded()
         print("\nFetching balances...")
         balances_data = await self._fetch_balances()
         balances = balances_data.get('balances', [])

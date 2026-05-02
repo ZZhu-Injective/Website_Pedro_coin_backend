@@ -2,55 +2,26 @@ import requests
 import time
 import pandas as pd
 import json
-import os
 from typing import List, Dict, Any, Union
 from datetime import datetime
 
+from .models import ScamWallet
+
 class ScamScannerChecker:
-    def __init__(self, address: str, scam_wallet_file: str = None):
+    def __init__(self, address: str):
         self.address = address
         self.base_url = f"https://sentry.exchange.grpc-web.injective.network/api/explorer/v1/accountTxs/{address}"
         self.df = pd.DataFrame()
-        self.range_size = 100 
+        self.range_size = 100
         self.current_block = 0
         self.analysis_results = {}
-        
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        
-        if scam_wallet_file is None:
-            env_path = os.environ.get('SCAM_DB_PATH')
-            if env_path and os.path.exists(env_path):
-                scam_wallet_file = env_path
-            else:
-                possible_paths = [
-                    os.path.join(script_dir, "ADpedro_scam_wallet.json"),
-                ]
-                
-                for path in possible_paths:
-                    if os.path.exists(path):
-                        scam_wallet_file = path
-                        break
-                else:
-                    scam_wallet_file = None
-        
-        self.scam_addresses = self._load_scam_addresses(scam_wallet_file)
-    
-    def _load_scam_addresses(self, scam_wallet_file: str) -> List[str]:
-        """Load scam addresses from JSON file with better error handling"""
+        self.scam_addresses = self._load_scam_addresses()
+
+    def _load_scam_addresses(self) -> List[str]:
         try:
-            if not os.path.exists(scam_wallet_file):
-                print(f"Scam addresses file not found: {scam_wallet_file}")
-                return []
-                
-            with open(scam_wallet_file, 'r') as f:
-                data = json.load(f)
-                scam_addresses = data.get("scam_addresses", [])
-                return scam_addresses
-        except (FileNotFoundError, json.JSONDecodeError, PermissionError) as e:
-            print(f"Error loading scam addresses: {e}")
-            return []
+            return list(ScamWallet.objects.values_list('address', flat=True))
         except Exception as e:
-            print(f"Unexpected error loading scam addresses: {e}")
+            print(f"Error loading scam addresses from DB: {e}")
             return []
     
     def fetch_sequential_ranges(self) -> pd.DataFrame:

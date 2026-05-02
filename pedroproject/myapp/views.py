@@ -177,7 +177,7 @@ async def talent_submit(request, address):
 async def talent(request):
     try:
         talent = TalentDataReaders()
-        info = talent.read_approved_talents()
+        info = await talent.read_approved_talents()
         return json_response(info)
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
@@ -256,7 +256,7 @@ Marketplace retrieval view.
 async def marketplace(request):
     try:
         market = MarketplaceDataReader()
-        info = market.read_approved_market()
+        info = await market.read_approved_market()
         return json_response(info)
     except Exception as e:
         return json_response({'error': str(e)}, status=500)
@@ -445,7 +445,7 @@ async def checker(request, address):
 async def scam(request):
     try:
         scam = ScamDataReader()
-        info = scam.read_excel()
+        info = await scam.read_excel()
         return json_response(info)
     except Exception as e:
         return json_response({'error': str(e)}, status=500)

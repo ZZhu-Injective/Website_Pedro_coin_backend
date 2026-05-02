@@ -1,39 +1,27 @@
-import os
-import pandas as pd
-from datetime import datetime
+from .models import MarketplaceListing
 
-#Get info from database about the marketplace items.
 
 class MarketplaceDataReader:
-    def __init__(self, file_path=None):
-        if file_path is None:
-            self.file_path = os.path.join('Amarketplace_submissions.xlsx')
-        else:
-            self.file_path = file_path
-
-    def read_approved_market(self):
-
-        if not os.path.exists(self.file_path):
-            raise FileNotFoundError(f"The file {self.file_path} does not exist.")
-
-        df = pd.read_excel(self.file_path)
-
-        required_columns = [
-            "id","WalletAddress","title","description","category","price","skills","images",
-            "sellerName","discordTag","createdAt","Views","Status"
-        ]
-
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            raise ValueError(f"Missing required columns: {missing_columns}")
-
-        approved_df = df[df['Status'].str.lower() == 'approved']
-
-        records = approved_df.to_dict(orient='records')
-
-        for idx, record in enumerate(records, start=1):
-            record['index'] = idx
-            if isinstance(record.get('Submission date'), datetime):
-                record['Submission date'] = record['Submission date'].strftime('%Y-%m-%d %H:%M:%S')
-
+    async def read_approved_market(self):
+        records = []
+        idx = 0
+        qs = MarketplaceListing.objects.filter(status__iexact='approved')
+        async for r in qs:
+            idx += 1
+            records.append({
+                'id': r.legacy_id if r.legacy_id is not None else r.id,
+                'WalletAddress': r.wallet_address,
+                'title': r.title,
+                'description': r.description,
+                'category': r.category,
+                'price': r.price,
+                'skills': r.skills,
+                'images': r.images,
+                'sellerName': r.seller_name,
+                'discordTag': r.discord_tag,
+                'createdAt': r.created_at.strftime('%Y-%m-%d %H:%M:%S') if r.created_at else None,
+                'Views': r.views,
+                'Status': r.status,
+                'index': idx,
+            })
         return records
