@@ -37,6 +37,18 @@ from .injective_scam import ScamDataReader
 from .injective_scam_check import ScamChecker
 from .injective_talent_check import TalentNotifier
 
+from datetime import datetime, timezone
+from django.db import IntegrityError
+from .models import GameLeaderboardEntry, GameUpgradeState
+from .injective_game import GameVerifier
+
+GAME_MAX_SCORE = 100_000_000
+GAME_MAX_LEVEL = 1000
+
+
+def _current_month():
+    return datetime.now(timezone.utc).strftime('%Y-%m')
+
 def json_response(data, status=200):
     return JsonResponse(data, safe=False, status=status)
 
@@ -526,3 +538,160 @@ async def talent_check(request):
         'status': 'error',
         'message': 'Only POST requests are allowed'
     }, status=405)
+
+
+@csrf_exempt
+def game_submit_score(request):
+    if request.method != 'POST':
+        return json_response({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return json_response({'error': 'Invalid JSON'}, status=400)
+
+    address = (body.get('address') or '').strip()
+    name = (body.get('name') or '').strip()[:64]
+    score = body.get('score')
+    tx_hash = (body.get('tx_hash') or '').strip()
+    captcha_token = (body.get('captcha_token') or '').strip()
+
+    if not address.startswith('inj1') or not name or not tx_hash:
+        return json_response({'error': 'Missing or invalid fields'}, status=400)
+    if not isinstance(score, int) or score < 1 or score > GAME_MAX_SCORE:
+        return json_response(
+            {'error': f'Score must be an integer in [1, {GAME_MAX_SCORE}]'},
+            status=400,
+        )
+
+    remote_ip = (
+        request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+        or request.META.get('REMOTE_ADDR', '')
+    )
+    ok, reason = GameVerifier.verify_captcha(captcha_token, remote_ip)
+    if not ok:
+        return json_response({'error': f'Captcha failed: {reason}'}, status=400)
+
+    ok, reason = GameVerifier.verify_pedro_burn(tx_hash, address)
+    if not ok:
+        return json_response({'error': f'Burn verification failed: {reason}'}, status=400)
+
+    try:
+        entry = GameLeaderboardEntry.objects.create(
+            address=address,
+            name=name,
+            score=score,
+            tx_hash=tx_hash,
+            month=_current_month(),
+        )
+    except IntegrityError:
+        return json_response({'error': 'Tx hash already used'}, status=409)
+
+    return json_response({'ok': True, 'id': entry.id, 'month': entry.month})
+
+
+def game_leaderboard(request):
+    month = _current_month()
+    qs = (
+        GameLeaderboardEntry.objects
+        .filter(month=month)
+        .order_by('-score', 'submitted_at')[:50]
+    )
+    return json_response({
+        'month': month,
+        'entries': [
+            {
+                'name': e.name,
+                'address': e.address,
+                'score': e.score,
+                'tx_hash': e.tx_hash,
+                'submitted_at': e.submitted_at.isoformat(),
+            }
+            for e in qs
+        ],
+    })
+
+
+def game_hall_of_fame(request):
+    current = _current_month()
+    months = (
+        GameLeaderboardEntry.objects
+        .exclude(month=current)
+        .values_list('month', flat=True)
+        .distinct()
+        .order_by('-month')
+    )
+    winners = []
+    for month in months:
+        top = (
+            GameLeaderboardEntry.objects
+            .filter(month=month)
+            .order_by('-score', 'submitted_at')
+            .first()
+        )
+        if top:
+            winners.append({
+                'month': top.month,
+                'name': top.name,
+                'address': top.address,
+                'score': top.score,
+                'tx_hash': top.tx_hash,
+            })
+    return json_response({'winners': winners})
+
+
+def game_upgrades_get(request, address):
+    address = (address or '').strip()
+    if not address.startswith('inj1'):
+        return json_response({'error': 'Invalid address'}, status=400)
+    try:
+        state = GameUpgradeState.objects.get(address=address)
+        return json_response({
+            'address': state.address,
+            'click_level': state.click_level,
+            'auto_level': state.auto_level,
+            'score': state.score,
+            'updated_at': state.updated_at.isoformat(),
+        })
+    except GameUpgradeState.DoesNotExist:
+        return json_response({
+            'address': address,
+            'click_level': 0,
+            'auto_level': 0,
+            'score': 0,
+            'updated_at': None,
+        })
+
+
+@csrf_exempt
+def game_upgrades_set(request):
+    if request.method != 'POST':
+        return json_response({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return json_response({'error': 'Invalid JSON'}, status=400)
+
+    address = (body.get('address') or '').strip()
+    click_level = body.get('click_level')
+    auto_level = body.get('auto_level')
+    score = body.get('score', 0)
+
+    if not address.startswith('inj1'):
+        return json_response({'error': 'Invalid address'}, status=400)
+    if not all(
+        isinstance(x, int) and 0 <= x <= GAME_MAX_LEVEL
+        for x in (click_level, auto_level)
+    ):
+        return json_response({'error': 'Invalid levels'}, status=400)
+    if not isinstance(score, int) or score < 0 or score > GAME_MAX_SCORE:
+        return json_response({'error': 'Invalid score'}, status=400)
+
+    GameUpgradeState.objects.update_or_create(
+        address=address,
+        defaults={
+            'click_level': click_level,
+            'auto_level': auto_level,
+            'score': score,
+        },
+    )
+    return json_response({'ok': True})

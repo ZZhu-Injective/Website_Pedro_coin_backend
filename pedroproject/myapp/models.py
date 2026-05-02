@@ -1,6 +1,32 @@
 from django.db import models
 
 
+class GameLeaderboardEntry(models.Model):
+    address = models.CharField(max_length=64, db_index=True)
+    name = models.CharField(max_length=64)
+    score = models.BigIntegerField()
+    tx_hash = models.CharField(max_length=128, unique=True, db_index=True)
+    month = models.CharField(max_length=7, db_index=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-score', 'submitted_at']
+
+    def __str__(self):
+        return f"{self.name} - {self.score} ({self.month})"
+
+
+class GameUpgradeState(models.Model):
+    address = models.CharField(max_length=64, unique=True, db_index=True)
+    click_level = models.IntegerField(default=0)
+    auto_level = models.IntegerField(default=0)
+    score = models.BigIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.address} (click={self.click_level}, auto={self.auto_level})"
+
+
 class TokenHolder(models.Model):
     address = models.CharField(max_length=255, unique=True)
     native_value = models.FloatField(default=0)

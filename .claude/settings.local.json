@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx --prefix \"C:\\\\Users\\\\Zonwie\\\\Documents\\\\GitHub\\\\PedroMain\" tsc --noEmit -p \"C:\\\\Users\\\\Zonwie\\\\Documents\\\\GitHub\\\\PedroMain\\\\tsconfig.json\")",
+      "Bash(\"C:\\\\Users\\\\Zonwie\\\\Documents\\\\GitHub\\\\PedroMain\\\\node_modules\\\\.bin\\\\tsc.cmd\" --noEmit -p \"C:\\\\Users\\\\Zonwie\\\\Documents\\\\GitHub\\\\PedroMain\\\\tsconfig.json\")",
+      "Read(//c/Users/Zonwie/Documents/GitHub/PedroMain/**)",
+      "Bash(npm install *)",
+      "Bash(python -m py_compile \"c:\\\\Users\\\\Zonwie\\\\Documents\\\\GitHub\\\\Website_Pedro_coin_backend\\\\pedroproject\\\\myapp\\\\views.py\" \"c:\\\\Users\\\\Zonwie\\\\Documents\\\\GitHub\\\\Website_Pedro_coin_backend\\\\pedroproject\\\\myapp\\\\injective_game.py\")"
+    ]
+  }
+}

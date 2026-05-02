@@ -36,4 +36,10 @@ urlpatterns = [
     path('inputscam/', views.scam_check, name='scam_check'),
     path('scam/', views.scam, name='scam'),
     path('talendsubmit', views.talent_check, name='talent_check'),
+
+    path('game/score/', views.game_submit_score, name='game_submit_score'),
+    path('game/leaderboard/', views.game_leaderboard, name='game_leaderboard'),
+    path('game/hall_of_fame/', views.game_hall_of_fame, name='game_hall_of_fame'),
+    path('game/upgrades/', views.game_upgrades_set, name='game_upgrades_set'),
+    path('game/upgrades/<str:address>/', views.game_upgrades_get, name='game_upgrades_get'),
 ]
