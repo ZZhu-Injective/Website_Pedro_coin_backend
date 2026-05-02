@@ -39,15 +39,75 @@ from .injective_talent_check import TalentNotifier
 
 from datetime import datetime, timezone
 from django.db import IntegrityError
-from .models import GameLeaderboardEntry, GameUpgradeState
+from django.db.models import Sum
+from .models import (
+    GameLeaderboardEntry,
+    GameUpgradeState,
+    GovernanceVoterSnapshot,
+    GovernanceVote,
+    GovernanceMonthResult,
+    DashboardTxLog,
+)
 from .injective_game import GameVerifier
+from .injective_governance import GovernanceVerifier, VALID_CHOICES
+from .injective_dashboard_logs import DashboardLogVerifier, FEATURE_MEMOS
 
 GAME_MAX_SCORE = 100_000_000
 GAME_MAX_LEVEL = 1000
 
+PEDRO_NFT_CONTRACT = 'inj1uq453kp4yda7ruc0axpmd9vzfm0fj62padhe0p'
+
+# Mirrors the exclusion list in management/commands/snapshot_governance.py:
+# burn address + Talis marketplace shouldn't get voting power.
+GOVERNANCE_EXCLUDED_ADDRESSES = {
+    'inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49',
+    'inj1l9nh9wv24fktjvclc4zgrgyzees7rwdtx45f54',
+}
+
 
 def _current_month():
     return datetime.now(timezone.utc).strftime('%Y-%m')
+
+
+def _ensure_snapshot(month):
+    """
+    Lazy snapshot: the first request to governance endpoints in a new month
+    triggers a fresh holder snapshot. Subsequent requests find rows already
+    present and skip the on-chain fetch.
+
+    Failures are swallowed — endpoints fall back to "snapshot pending" so the
+    UI can recover gracefully if the LCD/RPC is briefly unreachable.
+    """
+    if GovernanceVoterSnapshot.objects.filter(month=month).exists():
+        return
+
+    try:
+        from .injective_nft_holders import InjectiveHolders2
+        data = asyncio.run(InjectiveHolders2().fetch_holder_nft(PEDRO_NFT_CONTRACT))
+    except Exception as e:
+        logger.warning("Lazy snapshot for %s failed: %s", month, e)
+        return
+
+    rows = []
+    for h in data.get('holders') or []:
+        owner = h.get('owner')
+        total = h.get('total')
+        if not owner or owner in GOVERNANCE_EXCLUDED_ADDRESSES:
+            continue
+        try:
+            count = int(total)
+        except (TypeError, ValueError):
+            continue
+        if count <= 0:
+            continue
+        rows.append(GovernanceVoterSnapshot(month=month, address=owner, nft_count=count))
+
+    if rows:
+        GovernanceVoterSnapshot.objects.bulk_create(
+            rows,
+            ignore_conflicts=True,
+            batch_size=500,
+        )
 
 def json_response(data, status=200):
     return JsonResponse(data, safe=False, status=status)
@@ -695,3 +755,219 @@ def game_upgrades_set(request):
         },
     )
     return json_response({'ok': True})
+
+
+def _tally_for_month(month):
+    rows = (
+        GovernanceVote.objects
+        .filter(month=month)
+        .values('choice')
+        .annotate(points=Sum('points'))
+    )
+    tally = {c: 0 for c in VALID_CHOICES}
+    for row in rows:
+        tally[row['choice']] = int(row['points'] or 0)
+    return tally
+
+
+@csrf_exempt
+def governance_vote(request):
+    if request.method != 'POST':
+        return json_response({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return json_response({'error': 'Invalid JSON'}, status=400)
+
+    address = (body.get('address') or '').strip()
+    choice = (body.get('choice') or '').strip()
+    tx_hash = (body.get('tx_hash') or '').strip()
+
+    if not address.startswith('inj1') or not tx_hash:
+        return json_response({'error': 'Missing or invalid fields'}, status=400)
+    if choice not in VALID_CHOICES:
+        return json_response(
+            {'error': f'Invalid choice (allowed: {sorted(VALID_CHOICES)})'},
+            status=400,
+        )
+
+    month = _current_month()
+    _ensure_snapshot(month)
+
+    try:
+        snapshot = GovernanceVoterSnapshot.objects.get(month=month, address=address)
+    except GovernanceVoterSnapshot.DoesNotExist:
+        if not GovernanceVoterSnapshot.objects.filter(month=month).exists():
+            return json_response(
+                {'error': 'Voter snapshot for this month has not been taken yet'},
+                status=409,
+            )
+        return json_response(
+            {'error': 'You did not hold any Pedro NFTs at the start of this month'},
+            status=403,
+        )
+
+    if GovernanceVote.objects.filter(month=month, address=address).exists():
+        return json_response(
+            {'error': 'You have already voted this month'},
+            status=409,
+        )
+
+    ok, reason = GovernanceVerifier.verify_vote(tx_hash, address, month, choice)
+    if not ok:
+        return json_response({'error': f'Vote verification failed: {reason}'}, status=400)
+
+    try:
+        vote = GovernanceVote.objects.create(
+            address=address,
+            month=month,
+            choice=choice,
+            points=snapshot.nft_count,
+            tx_hash=tx_hash,
+        )
+    except IntegrityError:
+        return json_response(
+            {'error': 'Tx hash already used or duplicate vote'},
+            status=409,
+        )
+
+    return json_response({
+        'ok': True,
+        'id': vote.id,
+        'month': month,
+        'choice': choice,
+        'points': vote.points,
+    })
+
+
+def governance_current(request):
+    month = _current_month()
+    _ensure_snapshot(month)
+    address = (request.GET.get('address') or '').strip()
+
+    snapshot_count = GovernanceVoterSnapshot.objects.filter(month=month).count()
+    total_power = (
+        GovernanceVoterSnapshot.objects
+        .filter(month=month)
+        .aggregate(total=Sum('nft_count'))
+    )['total'] or 0
+
+    tally = _tally_for_month(month)
+    voters = GovernanceVote.objects.filter(month=month).count()
+
+    response = {
+        'month': month,
+        'snapshot_taken': snapshot_count > 0,
+        'eligible_voters': snapshot_count,
+        'total_voting_power': int(total_power),
+        'voters_so_far': voters,
+        'tally': tally,
+    }
+
+    if address.startswith('inj1'):
+        my = {
+            'address': address,
+            'eligible': False,
+            'nft_count': 0,
+            'has_voted': False,
+            'choice': None,
+            'tx_hash': None,
+        }
+        try:
+            snap = GovernanceVoterSnapshot.objects.get(month=month, address=address)
+            my['eligible'] = True
+            my['nft_count'] = snap.nft_count
+        except GovernanceVoterSnapshot.DoesNotExist:
+            pass
+        try:
+            vote = GovernanceVote.objects.get(month=month, address=address)
+            my['has_voted'] = True
+            my['choice'] = vote.choice
+            my['tx_hash'] = vote.tx_hash
+        except GovernanceVote.DoesNotExist:
+            pass
+        response['me'] = my
+
+    return json_response(response)
+
+
+def governance_history(request):
+    current = _current_month()
+    months = (
+        GovernanceVote.objects
+        .exclude(month=current)
+        .values_list('month', flat=True)
+        .distinct()
+        .order_by('-month')
+    )
+    out = []
+    for month in months:
+        tally = _tally_for_month(month)
+        winner = max(tally, key=lambda c: tally[c]) if any(tally.values()) else None
+        result = GovernanceMonthResult.objects.filter(month=month).first()
+        out.append({
+            'month': month,
+            'winning_choice': (
+                result.winning_choice if result and result.winning_choice else winner
+            ),
+            'tally': tally,
+            'payout': {
+                'tx_hash': result.payout_tx_hash if result else '',
+                'amount': result.payout_amount if result else '',
+                'notes': result.notes if result else '',
+            } if result else None,
+        })
+    return json_response({'history': out})
+
+
+@csrf_exempt
+def dashboard_tx_log(request):
+    if request.method != 'POST':
+        return json_response({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return json_response({'error': 'Invalid JSON'}, status=400)
+
+    tx_hash = (body.get('tx_hash') or '').strip()
+    feature = (body.get('feature') or '').strip()
+    address = (body.get('address') or '').strip()
+    summary = (body.get('summary') or '').strip()[:255]
+
+    if not tx_hash or not address.startswith('inj1') or feature not in FEATURE_MEMOS:
+        return json_response({'error': 'Missing or invalid fields'}, status=400)
+
+    ok, reason = DashboardLogVerifier.verify(tx_hash, address, feature)
+    if not ok:
+        return json_response({'error': f'Tx verification failed: {reason}'}, status=400)
+
+    try:
+        DashboardTxLog.objects.create(
+            tx_hash=tx_hash,
+            feature=feature,
+            address=address,
+            summary=summary,
+        )
+    except IntegrityError:
+        # Already logged — treat as success so the frontend doesn't surface an error.
+        pass
+
+    return json_response({'ok': True})
+
+
+def dashboard_tx_recent(request, feature):
+    if feature not in FEATURE_MEMOS:
+        return json_response({'error': f"Unknown feature '{feature}'"}, status=400)
+    qs = DashboardTxLog.objects.filter(feature=feature).order_by('-created_at')[:10]
+    return json_response({
+        'feature': feature,
+        'entries': [
+            {
+                'tx_hash': e.tx_hash,
+                'address': e.address,
+                'summary': e.summary,
+                'created_at': e.created_at.isoformat(),
+            }
+            for e in qs
+        ],
+    })

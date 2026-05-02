@@ -42,4 +42,11 @@ urlpatterns = [
     path('game/hall_of_fame/', views.game_hall_of_fame, name='game_hall_of_fame'),
     path('game/upgrades/', views.game_upgrades_set, name='game_upgrades_set'),
     path('game/upgrades/<str:address>/', views.game_upgrades_get, name='game_upgrades_get'),
+
+    path('governance/vote/', views.governance_vote, name='governance_vote'),
+    path('governance/current/', views.governance_current, name='governance_current'),
+    path('governance/history/', views.governance_history, name='governance_history'),
+
+    path('dashboard/tx/', views.dashboard_tx_log, name='dashboard_tx_log'),
+    path('dashboard/tx/<str:feature>/', views.dashboard_tx_recent, name='dashboard_tx_recent'),
 ]

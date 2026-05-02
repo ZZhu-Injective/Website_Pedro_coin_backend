@@ -27,6 +27,77 @@ class GameUpgradeState(models.Model):
         return f"{self.address} (click={self.click_level}, auto={self.auto_level})"
 
 
+class GovernanceVoterSnapshot(models.Model):
+    month = models.CharField(max_length=7, db_index=True)
+    address = models.CharField(max_length=64, db_index=True)
+    nft_count = models.IntegerField()
+    captured_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('month', 'address')]
+        ordering = ['-month', '-nft_count']
+
+    def __str__(self):
+        return f"{self.month} {self.address} ({self.nft_count})"
+
+
+class GovernanceVote(models.Model):
+    address = models.CharField(max_length=64, db_index=True)
+    month = models.CharField(max_length=7, db_index=True)
+    choice = models.CharField(max_length=32, db_index=True)
+    points = models.IntegerField()
+    tx_hash = models.CharField(max_length=128, unique=True, db_index=True)
+    voted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('address', 'month')]
+        ordering = ['-voted_at']
+
+    def __str__(self):
+        return f"{self.month} {self.address} -> {self.choice} ({self.points})"
+
+
+class DashboardTxLog(models.Model):
+    FEATURE_CONVERTER = 'converter'
+    FEATURE_AIRDROP = 'airdrop'
+    FEATURE_LAUNCHER = 'launcher'
+    FEATURE_CHOICES = [
+        (FEATURE_CONVERTER, 'Converter'),
+        (FEATURE_AIRDROP, 'Airdrop'),
+        (FEATURE_LAUNCHER, 'Launcher'),
+    ]
+
+    tx_hash = models.CharField(max_length=128, unique=True, db_index=True)
+    feature = models.CharField(max_length=32, db_index=True, choices=FEATURE_CHOICES)
+    address = models.CharField(max_length=64, db_index=True)
+    summary = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.feature} {self.address} {self.tx_hash[:12]}"
+
+
+class GovernanceMonthResult(models.Model):
+    month = models.CharField(max_length=7, unique=True, db_index=True)
+    winning_choice = models.CharField(max_length=32, blank=True)
+    points_liquidity = models.IntegerField(default=0)
+    points_buy_nfts = models.IntegerField(default=0)
+    points_giveaway = models.IntegerField(default=0)
+    payout_tx_hash = models.CharField(max_length=128, blank=True)
+    payout_amount = models.CharField(max_length=64, blank=True)
+    notes = models.TextField(blank=True)
+    finalized_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-month']
+
+    def __str__(self):
+        return f"{self.month} -> {self.winning_choice}"
+
+
 class TokenHolder(models.Model):
     address = models.CharField(max_length=255, unique=True)
     native_value = models.FloatField(default=0)
