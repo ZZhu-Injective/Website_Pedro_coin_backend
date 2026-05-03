@@ -67,6 +67,11 @@ class GameVerifier:
 
     @staticmethod
     def verify_captcha(token: str, remote_ip: str = "") -> tuple[bool, str]:
+        """
+        reCAPTCHA v3 verification. v3 always returns `success: true` for valid
+        tokens — the real signal is the `score` (0.0 = bot, 1.0 = human) and
+        `action` matching what the frontend declared.
+        """
         secret = os.environ.get("RECAPTCHA_SECRET_KEY", "")
         if not secret:
             # Configuration gap — fail closed so a missing env var on prod is
@@ -94,4 +99,18 @@ class GameVerifier:
         if not data.get("success"):
             error_codes = data.get("error-codes") or []
             return False, f"Captcha rejected: {','.join(error_codes) or 'unknown'}"
+
+        # v3-specific checks: action and score must look human-ish.
+        action = data.get("action")
+        if action and action != "submit_score":
+            return False, f"Captcha action mismatch (got '{action}')"
+
+        try:
+            min_score = float(os.environ.get("RECAPTCHA_MIN_SCORE", "0.5"))
+        except ValueError:
+            min_score = 0.5
+        score = data.get("score")
+        if isinstance(score, (int, float)) and score < min_score:
+            return False, f"Captcha score too low ({score:.2f} < {min_score:.2f})"
+
         return True, "OK"
