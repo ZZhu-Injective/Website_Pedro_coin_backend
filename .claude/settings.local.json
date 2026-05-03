@@ -13,7 +13,8 @@
     "additionalDirectories": [
       "C:\\Users\\Zonwie\\Documents\\GitHub\\PedroMain\\src\\app\\dashboard\\airdrop",
       "C:\\Users\\Zonwie\\Documents\\GitHub\\PedroMain\\src\\components",
-      "C:\\Users\\Zonwie\\Documents\\GitHub\\PedroMain\\src\\app\\dashboard\\game"
+      "C:\\Users\\Zonwie\\Documents\\GitHub\\PedroMain\\src\\app\\dashboard\\game",
+      "C:\\Users\\Zonwie\\Documents\\GitHub\\PedroMain\\src\\app\\dashboard\\governance"
     ]
   }
 }
