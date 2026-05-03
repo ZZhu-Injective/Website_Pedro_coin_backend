@@ -69,13 +69,19 @@ def _current_month():
     return datetime.now(timezone.utc).strftime('%Y-%m')
 
 
-def _run_async(coro):
+def _run_async(coro_factory):
     """
     Run an async coroutine from a sync context. Handles both:
-      - WSGI / pure sync Django: just asyncio.run()
+      - WSGI / pure sync Django: asyncio.run() in this thread.
       - ASGI / uvicorn / daphne: we're inside a running loop, so spin up a
-        worker thread with its own loop. Avoids "asyncio.run() cannot be
-        called from a running event loop".
+        worker thread with its own loop.
+
+    `coro_factory` must be a CALLABLE that returns a fresh coroutine — not a
+    coroutine object. We defer instantiation until we're inside the right
+    loop because libraries like gRPC bind their futures to whichever loop is
+    running at construction/first-call time. Passing a pre-built coroutine
+    creates futures attached to the parent loop, then awaiting them in the
+    worker loop fails with "attached to a different loop".
     """
     try:
         running_loop = asyncio.get_running_loop()
@@ -83,11 +89,11 @@ def _run_async(coro):
         running_loop = None
 
     if running_loop is None:
-        return asyncio.run(coro)
+        return asyncio.run(coro_factory())
 
     import concurrent.futures
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result()
+        return pool.submit(lambda: asyncio.run(coro_factory())).result()
 
 
 def _ensure_snapshot(month):
@@ -107,7 +113,12 @@ def _ensure_snapshot(month):
 
     try:
         from .injective_nft_holders import InjectiveHolders2
-        data = _run_async(InjectiveHolders2().fetch_holder_nft(PEDRO_NFT_CONTRACT))
+
+        async def _fetch():
+            # Construct *inside* the loop so gRPC futures bind to it.
+            return await InjectiveHolders2().fetch_holder_nft(PEDRO_NFT_CONTRACT)
+
+        data = _run_async(_fetch)
     except Exception as e:
         logger.error(
             "Lazy snapshot for %s failed: %s", month, e, exc_info=True,
