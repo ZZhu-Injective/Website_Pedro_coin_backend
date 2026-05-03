@@ -61,5 +61,9 @@ class DashboardLogVerifier:
             sender = msg.get("from_address") or msg.get("sender")
             if sender == address:
                 return True, "OK"
+            # MsgMultiSend (airdrop) puts the sender(s) under inputs[].address.
+            for inp in msg.get("inputs") or []:
+                if inp.get("address") == address:
+                    return True, "OK"
 
         return False, "No message in tx is signed by the claimed sender"

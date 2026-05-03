@@ -5,7 +5,12 @@
       "Bash(\"C:\\\\Users\\\\Zonwie\\\\Documents\\\\GitHub\\\\PedroMain\\\\node_modules\\\\.bin\\\\tsc.cmd\" --noEmit -p \"C:\\\\Users\\\\Zonwie\\\\Documents\\\\GitHub\\\\PedroMain\\\\tsconfig.json\")",
       "Read(//c/Users/Zonwie/Documents/GitHub/PedroMain/**)",
       "Bash(npm install *)",
-      "Bash(python -m py_compile \"c:\\\\Users\\\\Zonwie\\\\Documents\\\\GitHub\\\\Website_Pedro_coin_backend\\\\pedroproject\\\\myapp\\\\views.py\" \"c:\\\\Users\\\\Zonwie\\\\Documents\\\\GitHub\\\\Website_Pedro_coin_backend\\\\pedroproject\\\\myapp\\\\injective_game.py\")"
+      "Bash(python -m py_compile \"c:\\\\Users\\\\Zonwie\\\\Documents\\\\GitHub\\\\Website_Pedro_coin_backend\\\\pedroproject\\\\myapp\\\\views.py\" \"c:\\\\Users\\\\Zonwie\\\\Documents\\\\GitHub\\\\Website_Pedro_coin_backend\\\\pedroproject\\\\myapp\\\\injective_game.py\")",
+      "Bash(python -m py_compile \"c:\\\\Users\\\\Zonwie\\\\Documents\\\\GitHub\\\\Website_Pedro_coin_backend\\\\pedroproject\\\\myapp\\\\injective_dashboard_logs.py\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Zonwie\\Documents\\GitHub\\PedroMain\\src\\app\\dashboard\\airdrop",
+      "C:\\Users\\Zonwie\\Documents\\GitHub\\PedroMain\\src\\components"
     ]
   }
 }
