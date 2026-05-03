@@ -69,24 +69,50 @@ def _current_month():
     return datetime.now(timezone.utc).strftime('%Y-%m')
 
 
+def _run_async(coro):
+    """
+    Run an async coroutine from a sync context. Handles both:
+      - WSGI / pure sync Django: just asyncio.run()
+      - ASGI / uvicorn / daphne: we're inside a running loop, so spin up a
+        worker thread with its own loop. Avoids "asyncio.run() cannot be
+        called from a running event loop".
+    """
+    try:
+        running_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        running_loop = None
+
+    if running_loop is None:
+        return asyncio.run(coro)
+
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
 def _ensure_snapshot(month):
     """
     Lazy snapshot: the first request to governance endpoints in a new month
     triggers a fresh holder snapshot. Subsequent requests find rows already
     present and skip the on-chain fetch.
 
-    Failures are swallowed — endpoints fall back to "snapshot pending" so the
-    UI can recover gracefully if the LCD/RPC is briefly unreachable.
+    Returns:
+        None on success (or when a snapshot already exists)
+        An error string when the lazy snapshot couldn't complete — useful for
+        surfacing the reason in the API response so the UI / debugger can see
+        why voting is still blocked.
     """
     if GovernanceVoterSnapshot.objects.filter(month=month).exists():
-        return
+        return None
 
     try:
         from .injective_nft_holders import InjectiveHolders2
-        data = asyncio.run(InjectiveHolders2().fetch_holder_nft(PEDRO_NFT_CONTRACT))
+        data = _run_async(InjectiveHolders2().fetch_holder_nft(PEDRO_NFT_CONTRACT))
     except Exception as e:
-        logger.warning("Lazy snapshot for %s failed: %s", month, e)
-        return
+        logger.error(
+            "Lazy snapshot for %s failed: %s", month, e, exc_info=True,
+        )
+        return f"on-chain fetch failed: {e}"
 
     rows = []
     for h in data.get('holders') or []:
@@ -102,12 +128,15 @@ def _ensure_snapshot(month):
             continue
         rows.append(GovernanceVoterSnapshot(month=month, address=owner, nft_count=count))
 
-    if rows:
-        GovernanceVoterSnapshot.objects.bulk_create(
-            rows,
-            ignore_conflicts=True,
-            batch_size=500,
-        )
+    if not rows:
+        return "no holders returned by on-chain fetch"
+
+    GovernanceVoterSnapshot.objects.bulk_create(
+        rows,
+        ignore_conflicts=True,
+        batch_size=500,
+    )
+    return None
 
 def json_response(data, status=200):
     return JsonResponse(data, safe=False, status=status)
@@ -842,7 +871,7 @@ def governance_vote(request):
 
 def governance_current(request):
     month = _current_month()
-    _ensure_snapshot(month)
+    snapshot_error = _ensure_snapshot(month)
     address = (request.GET.get('address') or '').strip()
 
     snapshot_count = GovernanceVoterSnapshot.objects.filter(month=month).count()
@@ -858,6 +887,7 @@ def governance_current(request):
     response = {
         'month': month,
         'snapshot_taken': snapshot_count > 0,
+        'snapshot_error': snapshot_error,
         'eligible_voters': snapshot_count,
         'total_voting_power': int(total_power),
         'voters_so_far': voters,
