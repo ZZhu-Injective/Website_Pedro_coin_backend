@@ -20,11 +20,29 @@ class GameUpgradeState(models.Model):
     address = models.CharField(max_length=64, unique=True, db_index=True)
     click_level = models.IntegerField(default=0)
     auto_level = models.IntegerField(default=0)
+    steal_level = models.IntegerField(default=0)
     score = models.BigIntegerField(default=0)
+    last_steal_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.address} (click={self.click_level}, auto={self.auto_level})"
+        return f"{self.address} (click={self.click_level}, auto={self.auto_level}, steal={self.steal_level})"
+
+
+class GameStealLog(models.Model):
+    """One row per successful steal — keeps a simple audit trail and lets the
+    UI show recent activity if we ever want to."""
+    attacker = models.CharField(max_length=64, db_index=True)
+    target = models.CharField(max_length=64, db_index=True)
+    amount = models.BigIntegerField()
+    attacker_level = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.attacker} -> {self.target} ({self.amount})"
 
 
 class GovernanceVoterSnapshot(models.Model):

@@ -43,6 +43,7 @@ from django.db.models import Sum
 from .models import (
     GameLeaderboardEntry,
     GameUpgradeState,
+    GameStealLog,
     GovernanceVoterSnapshot,
     GovernanceVote,
     GovernanceMonthResult,
@@ -54,6 +55,26 @@ from .injective_dashboard_logs import DashboardLogVerifier, FEATURE_MEMOS
 
 GAME_MAX_SCORE = 100_000_000
 GAME_MAX_LEVEL = 1000
+
+# Steal feature: amount = STEAL_BASE * 2^level. Default level 0 ⇒ 100 points.
+STEAL_BASE_AMOUNT = 100
+# Server-side cooldown so a spammed button can't drain a target instantly.
+STEAL_COOLDOWN_SECONDS = 30 * 60
+
+
+def _locked_name_for(address: str) -> str:
+    """Returns the canonical display name for an address (the name used on
+    its first leaderboard submission), or '' if the address has never
+    submitted. Used both to enforce the lock on subsequent submits and to
+    let the frontend prefill+disable the name field."""
+    first = (
+        GameLeaderboardEntry.objects
+        .filter(address=address)
+        .order_by('submitted_at', 'id')
+        .values_list('name', flat=True)
+        .first()
+    )
+    return first or ''
 
 PEDRO_NFT_CONTRACT = 'inj1uq453kp4yda7ruc0axpmd9vzfm0fj62padhe0p'
 
@@ -675,6 +696,12 @@ def game_submit_score(request):
     if not ok:
         return json_response({'error': f'Burn verification failed: {reason}'}, status=400)
 
+    # If the wallet has submitted before, force the original display name so
+    # everyone sees consistent identity across submissions / steal targeting.
+    locked = _locked_name_for(address)
+    if locked:
+        name = locked
+
     try:
         entry = GameLeaderboardEntry.objects.create(
             address=address,
@@ -686,27 +713,49 @@ def game_submit_score(request):
     except IntegrityError:
         return json_response({'error': 'Tx hash already used'}, status=409)
 
-    return json_response({'ok': True, 'id': entry.id, 'month': entry.month})
+    return json_response({
+        'ok': True,
+        'id': entry.id,
+        'month': entry.month,
+        'name': entry.name,
+    })
 
 
 def game_leaderboard(request):
     month = _current_month()
+    # Dedup by address — only keep the highest score per wallet. Because the
+    # base queryset is already sorted by score desc, the first time we see an
+    # address is also its highest entry for the month.
     qs = (
         GameLeaderboardEntry.objects
         .filter(month=month)
-        .order_by('-score', 'submitted_at')[:50]
+        .order_by('-score', 'submitted_at')
     )
+    seen = set()
+    deduped = []
+    for entry in qs:
+        if entry.address in seen:
+            continue
+        seen.add(entry.address)
+        deduped.append(entry)
+        if len(deduped) >= 50:
+            break
+
+    # Use the canonical (first-submitted) name for every row so a wallet that
+    # has submitted under different names in the past still shows up under
+    # its original identity.
+    locked = {addr: _locked_name_for(addr) for addr in seen}
     return json_response({
         'month': month,
         'entries': [
             {
-                'name': e.name,
+                'name': locked.get(e.address) or e.name,
                 'address': e.address,
                 'score': e.score,
                 'tx_hash': e.tx_hash,
                 'submitted_at': e.submitted_at.isoformat(),
             }
-            for e in qs
+            for e in deduped
         ],
     })
 
@@ -729,9 +778,10 @@ def game_hall_of_fame(request):
             .first()
         )
         if top:
+            canonical = _locked_name_for(top.address) or top.name
             winners.append({
                 'month': top.month,
-                'name': top.name,
+                'name': canonical,
                 'address': top.address,
                 'score': top.score,
                 'tx_hash': top.tx_hash,
@@ -743,13 +793,17 @@ def game_upgrades_get(request, address):
     address = (address or '').strip()
     if not address.startswith('inj1'):
         return json_response({'error': 'Invalid address'}, status=400)
+    locked_name = _locked_name_for(address)
     try:
         state = GameUpgradeState.objects.get(address=address)
         return json_response({
             'address': state.address,
             'click_level': state.click_level,
             'auto_level': state.auto_level,
+            'steal_level': state.steal_level,
             'score': state.score,
+            'last_steal_at': state.last_steal_at.isoformat() if state.last_steal_at else None,
+            'locked_name': locked_name,
             'updated_at': state.updated_at.isoformat(),
         })
     except GameUpgradeState.DoesNotExist:
@@ -757,7 +811,10 @@ def game_upgrades_get(request, address):
             'address': address,
             'click_level': 0,
             'auto_level': 0,
+            'steal_level': 0,
             'score': 0,
+            'last_steal_at': None,
+            'locked_name': locked_name,
             'updated_at': None,
         })
 
@@ -774,13 +831,14 @@ def game_upgrades_set(request):
     address = (body.get('address') or '').strip()
     click_level = body.get('click_level')
     auto_level = body.get('auto_level')
+    steal_level = body.get('steal_level', 0)
     score = body.get('score', 0)
 
     if not address.startswith('inj1'):
         return json_response({'error': 'Invalid address'}, status=400)
     if not all(
         isinstance(x, int) and 0 <= x <= GAME_MAX_LEVEL
-        for x in (click_level, auto_level)
+        for x in (click_level, auto_level, steal_level)
     ):
         return json_response({'error': 'Invalid levels'}, status=400)
     if not isinstance(score, int) or score < 0 or score > GAME_MAX_SCORE:
@@ -791,10 +849,84 @@ def game_upgrades_set(request):
         defaults={
             'click_level': click_level,
             'auto_level': auto_level,
+            'steal_level': steal_level,
             'score': score,
         },
     )
     return json_response({'ok': True})
+
+
+@csrf_exempt
+def game_steal(request):
+    """
+    Take points from another player. Steal amount is `STEAL_BASE_AMOUNT * 2^level`,
+    where `level` comes from the attacker's server-stored steal_level (NOT from
+    the client). Capped at the target's available score. Cooldown enforced
+    server-side so the button can't be spammed.
+
+    Body: { attacker: 'inj1...', target: 'inj1...' }
+    """
+    if request.method != 'POST':
+        return json_response({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return json_response({'error': 'Invalid JSON'}, status=400)
+
+    attacker_addr = (body.get('attacker') or '').strip()
+    target_addr = (body.get('target') or '').strip()
+
+    if not attacker_addr.startswith('inj1') or not target_addr.startswith('inj1'):
+        return json_response({'error': 'Invalid address'}, status=400)
+    if attacker_addr == target_addr:
+        return json_response({'error': "You can't steal from yourself"}, status=400)
+
+    attacker, _ = GameUpgradeState.objects.get_or_create(address=attacker_addr)
+    try:
+        target = GameUpgradeState.objects.get(address=target_addr)
+    except GameUpgradeState.DoesNotExist:
+        return json_response({'error': 'Target has no game state'}, status=404)
+
+    # Cooldown: time since last steal must exceed STEAL_COOLDOWN_SECONDS.
+    now = datetime.now(timezone.utc)
+    if attacker.last_steal_at:
+        elapsed = (now - attacker.last_steal_at).total_seconds()
+        if elapsed < STEAL_COOLDOWN_SECONDS:
+            wait = int(STEAL_COOLDOWN_SECONDS - elapsed) + 1
+            return json_response(
+                {'error': f'Cooldown — try again in {wait}s'},
+                status=429,
+            )
+
+    if target.score <= 0:
+        return json_response(
+            {'error': 'Target has no points to steal'},
+            status=400,
+        )
+
+    steal_amount = STEAL_BASE_AMOUNT * (2 ** attacker.steal_level)
+    actual = min(steal_amount, target.score)
+
+    target.score -= actual
+    attacker.score = min(GAME_MAX_SCORE, attacker.score + actual)
+    attacker.last_steal_at = now
+    target.save(update_fields=['score', 'updated_at'])
+    attacker.save(update_fields=['score', 'last_steal_at', 'updated_at'])
+
+    GameStealLog.objects.create(
+        attacker=attacker_addr,
+        target=target_addr,
+        amount=actual,
+        attacker_level=attacker.steal_level,
+    )
+
+    return json_response({
+        'ok': True,
+        'stolen': actual,
+        'attacker_score': attacker.score,
+        'target_score': target.score,
+        'cooldown_seconds': STEAL_COOLDOWN_SECONDS,
+    })
 
 
 def _tally_for_month(month):
