@@ -25,9 +25,18 @@ class GameVerifier:
     """
 
     @staticmethod
-    def verify_pedro_burn(tx_hash: str, expected_from: str) -> tuple[bool, str]:
+    def verify_pedro_burn(
+        tx_hash: str,
+        expected_from: str,
+        expected_amount_pedro: int = 1,
+    ) -> tuple[bool, str]:
+        """Verifies that `tx_hash` contains a `MsgSend` from `expected_from`
+        to the burn address, transferring exactly `expected_amount_pedro`
+        whole PEDRO. Defaults to 1 to keep existing call sites working."""
         if not tx_hash or not expected_from:
             return False, "Missing tx hash or address"
+        if expected_amount_pedro < 1:
+            return False, "Expected burn amount must be >= 1"
 
         url = f"{INJECTIVE_LCD}/cosmos/tx/v1beta1/txs/{tx_hash.upper()}"
         try:
@@ -48,6 +57,8 @@ class GameVerifier:
         if tx_response.get("code", -1) != 0:
             return False, "Tx failed on chain"
 
+        expected_wei = str(expected_amount_pedro) + "0" * PEDRO_DECIMALS
+
         body = (data.get("tx") or {}).get("body") or {}
         for msg in body.get("messages", []):
             if msg.get("@type") != MSG_SEND_TYPE:
@@ -59,11 +70,11 @@ class GameVerifier:
             for coin in msg.get("amount", []):
                 if (
                     coin.get("denom") == PEDRO_DENOM
-                    and coin.get("amount") == ONE_PEDRO_WEI
+                    and coin.get("amount") == expected_wei
                 ):
                     return True, "OK"
 
-        return False, "No matching 1 $PEDRO burn message in tx"
+        return False, f"No matching {expected_amount_pedro} $PEDRO burn message in tx"
 
     @staticmethod
     def verify_captcha(token: str, remote_ip: str = "") -> tuple[bool, str]:

@@ -29,6 +29,86 @@ class GameUpgradeState(models.Model):
         return f"{self.address} (click={self.click_level}, auto={self.auto_level}, steal={self.steal_level})"
 
 
+class RaffleTicket(models.Model):
+    """One row per ticket entered in a given week. Free tickets come from
+    NFT holdings, paid tickets come from a $PEDRO burn."""
+    SOURCE_FREE = 'free'
+    SOURCE_PAID = 'paid'
+    SOURCE_CHOICES = [
+        (SOURCE_FREE, 'Free (NFT holder)'),
+        (SOURCE_PAID, 'Paid'),
+    ]
+
+    week = models.CharField(max_length=10, db_index=True)
+    address = models.CharField(max_length=64, db_index=True)
+    source = models.CharField(max_length=16, choices=SOURCE_CHOICES)
+    # Multiple paid tickets share the same tx_hash when bought together,
+    # so this is indexed but NOT unique. Replay protection lives in
+    # `RafflePurchase.tx_hash` (which IS unique).
+    tx_hash = models.CharField(max_length=128, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['week', 'address'])]
+
+    def __str__(self):
+        return f"#{self.id} {self.week} {self.address} ({self.source})"
+
+
+class RaffleFreeClaim(models.Model):
+    """Records that an NFT holder has used their free ticket allowance for a
+    given week. Enforced by `unique_together` so each wallet can claim at
+    most once per week."""
+    address = models.CharField(max_length=64, db_index=True)
+    week = models.CharField(max_length=10, db_index=True)
+    nft_count_at_claim = models.IntegerField()
+    tickets_granted = models.IntegerField()
+    claimed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('address', 'week')]
+        ordering = ['-claimed_at']
+
+    def __str__(self):
+        return f"{self.week} {self.address} +{self.tickets_granted} (free)"
+
+
+class RafflePurchase(models.Model):
+    """One row per paid ticket purchase tx — used purely to prevent the
+    same on-chain burn from being re-credited."""
+    tx_hash = models.CharField(max_length=128, unique=True, db_index=True)
+    address = models.CharField(max_length=64, db_index=True)
+    week = models.CharField(max_length=10, db_index=True)
+    tickets = models.IntegerField()
+    pedro_burned = models.IntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.week} {self.address} +{self.tickets} for {self.pedro_burned} PEDRO"
+
+
+class RaffleResult(models.Model):
+    """One row per completed week's draw. Winner opens a Discord ticket to
+    claim 1 INJ; `payout_tx_hash` is filled by the team after payout."""
+    week = models.CharField(max_length=10, unique=True, db_index=True)
+    winning_address = models.CharField(max_length=64, db_index=True)
+    winning_ticket_id = models.BigIntegerField()
+    winning_name = models.CharField(max_length=64, blank=True)
+    ticket_count = models.IntegerField()
+    picked_at = models.DateTimeField(auto_now_add=True)
+    payout_tx_hash = models.CharField(max_length=128, blank=True)
+
+    class Meta:
+        ordering = ['-week']
+
+    def __str__(self):
+        return f"{self.week} -> {self.winning_address} (#{self.winning_ticket_id})"
+
+
 class GameStealLog(models.Model):
     """One row per successful steal — keeps a simple audit trail and lets the
     UI show recent activity if we ever want to."""

@@ -45,6 +45,11 @@ urlpatterns = [
     path('game/steal/', views.game_steal, name='game_steal'),
     path('game/nft/<str:address>/', views.game_nft_status, name='game_nft_status'),
 
+    path('raffle/current/<str:address>/', views.raffle_current, name='raffle_current'),
+    path('raffle/claim_free/', views.raffle_claim_free, name='raffle_claim_free'),
+    path('raffle/buy/', views.raffle_buy, name='raffle_buy'),
+    path('raffle/history/', views.raffle_history, name='raffle_history'),
+
     path('governance/vote/', views.governance_vote, name='governance_vote'),
     path('governance/current/', views.governance_current, name='governance_current'),
     path('governance/history/', views.governance_history, name='governance_history'),

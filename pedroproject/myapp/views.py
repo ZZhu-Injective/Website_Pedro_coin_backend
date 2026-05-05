@@ -37,7 +37,7 @@ from .injective_scam import ScamDataReader
 from .injective_scam_check import ScamChecker
 from .injective_talent_check import TalentNotifier
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from django.db import IntegrityError
 from django.db.models import Sum
 from .models import (
@@ -48,6 +48,10 @@ from .models import (
     GovernanceVote,
     GovernanceMonthResult,
     DashboardTxLog,
+    RaffleTicket,
+    RaffleFreeClaim,
+    RafflePurchase,
+    RaffleResult,
 )
 from .injective_game import GameVerifier, INJECTIVE_LCD
 from .injective_governance import GovernanceVerifier, VALID_CHOICES
@@ -59,7 +63,10 @@ GAME_MAX_LEVEL = 1000
 # Steal feature: amount = STEAL_BASE * 2^level. Default level 0 ⇒ 100 points.
 STEAL_BASE_AMOUNT = 100
 # Server-side cooldown so a spammed button can't drain a target instantly.
-STEAL_COOLDOWN_SECONDS = 30 * 60
+STEAL_COOLDOWN_SECONDS = 6 * 60 * 60
+# Hard cap on steal upgrades — at level 12 the steal amount is already
+# 100 * 2^12 = 409,600 base.
+STEAL_MAX_LEVEL = 12
 
 
 _NFT_HOLDERS_CACHE: dict[str, int] = {}
@@ -941,9 +948,11 @@ def game_upgrades_set(request):
         return json_response({'error': 'Invalid address'}, status=400)
     if not all(
         isinstance(x, int) and 0 <= x <= GAME_MAX_LEVEL
-        for x in (click_level, auto_level, steal_level)
+        for x in (click_level, auto_level)
     ):
         return json_response({'error': 'Invalid levels'}, status=400)
+    if not (isinstance(steal_level, int) and 0 <= steal_level <= STEAL_MAX_LEVEL):
+        return json_response({'error': 'Invalid steal level'}, status=400)
     if not isinstance(score, int) or score < 0 or score > GAME_MAX_SCORE:
         return json_response({'error': 'Invalid score'}, status=400)
 
@@ -1050,6 +1059,237 @@ def game_steal(request):
         'attacker_score': attacker.score,
         'target_score': target.score,
         'cooldown_seconds': STEAL_COOLDOWN_SECONDS,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Raffle
+# ---------------------------------------------------------------------------
+
+RAFFLE_PRIZE_LABEL = '1 INJ'
+RAFFLE_COST_HOLDER_PEDRO = 5  # PEDRO per ticket if you hold ≥1 NFT
+RAFFLE_COST_NON_HOLDER_PEDRO = 10  # PEDRO per ticket if you don't
+
+
+def _current_week() -> str:
+    """ISO week string for the current UTC moment, e.g. '2026-W18'.
+    Weeks roll over Monday 00:00 UTC."""
+    now = datetime.now(timezone.utc)
+    iso_year, iso_week, _ = now.isocalendar()
+    return f"{iso_year}-W{iso_week:02d}"
+
+
+def _week_bounds_utc(week: str) -> tuple[datetime, datetime]:
+    """Returns the [start, end) timestamps for the given ISO week."""
+    year_str, week_str = week.split('-W')
+    year, wk = int(year_str), int(week_str)
+    # ISO weekday 1 == Monday. fromisocalendar handles ISO week boundaries.
+    start = datetime.fromisocalendar(year, wk, 1).replace(tzinfo=timezone.utc)
+    end = start + timedelta(days=7)
+    return start, end
+
+
+def _seconds_until_week_end(week: str) -> int:
+    _, end = _week_bounds_utc(week)
+    delta = (end - datetime.now(timezone.utc)).total_seconds()
+    return max(0, int(delta))
+
+
+def _ticket_cost_for(address: str) -> int:
+    return (
+        RAFFLE_COST_HOLDER_PEDRO
+        if _fetch_pedro_nft_count(address) >= 1
+        else RAFFLE_COST_NON_HOLDER_PEDRO
+    )
+
+
+def _serialize_my_tickets(address: str, week: str) -> list[dict]:
+    return [
+        {
+            'id': t.id,
+            'source': t.source,
+            'created_at': t.created_at.isoformat(),
+        }
+        for t in RaffleTicket.objects
+        .filter(week=week, address=address)
+        .order_by('id')
+    ]
+
+
+def raffle_current(request, address):
+    """Snapshot of the current week for one wallet — entries, totals, prize,
+    ticket cost, free-claim eligibility."""
+    address = (address or '').strip()
+    if not address.startswith('inj1'):
+        return json_response({'error': 'Invalid address'}, status=400)
+
+    week = _current_week()
+    nft_count = _fetch_pedro_nft_count(address)
+    total_tickets = RaffleTicket.objects.filter(week=week).count()
+    my_tickets = _serialize_my_tickets(address, week)
+    already_claimed_free = RaffleFreeClaim.objects.filter(
+        address=address, week=week,
+    ).exists()
+    cost_pedro = (
+        RAFFLE_COST_HOLDER_PEDRO if nft_count >= 1 else RAFFLE_COST_NON_HOLDER_PEDRO
+    )
+
+    return json_response({
+        'week': week,
+        'seconds_until_end': _seconds_until_week_end(week),
+        'prize': RAFFLE_PRIZE_LABEL,
+        'nft_count': nft_count,
+        'cost_pedro': cost_pedro,
+        'free_tickets_available': nft_count if not already_claimed_free else 0,
+        'free_already_claimed': already_claimed_free,
+        'total_tickets_this_week': total_tickets,
+        'my_tickets': my_tickets,
+    })
+
+
+@csrf_exempt
+def raffle_claim_free(request):
+    """One-shot per week per wallet: grants `nft_count` free raffle tickets
+    based on the wallet's current Pedro NFT count."""
+    if request.method != 'POST':
+        return json_response({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return json_response({'error': 'Invalid JSON'}, status=400)
+
+    address = (body.get('address') or '').strip()
+    if not address.startswith('inj1'):
+        return json_response({'error': 'Invalid address'}, status=400)
+
+    week = _current_week()
+    nft_count = _fetch_pedro_nft_count(address)
+    if nft_count < 1:
+        return json_response(
+            {'error': 'Free tickets require at least one Pedro NFT'},
+            status=400,
+        )
+
+    if RaffleFreeClaim.objects.filter(address=address, week=week).exists():
+        return json_response(
+            {'error': 'Free tickets already claimed for this week'},
+            status=409,
+        )
+
+    new_tickets = [
+        RaffleTicket(
+            week=week,
+            address=address,
+            source=RaffleTicket.SOURCE_FREE,
+        )
+        for _ in range(nft_count)
+    ]
+    RaffleTicket.objects.bulk_create(new_tickets)
+    RaffleFreeClaim.objects.create(
+        address=address,
+        week=week,
+        nft_count_at_claim=nft_count,
+        tickets_granted=nft_count,
+    )
+
+    return json_response({
+        'ok': True,
+        'tickets_granted': nft_count,
+        'week': week,
+        'my_tickets': _serialize_my_tickets(address, week),
+    })
+
+
+@csrf_exempt
+def raffle_buy(request):
+    """Buy paid tickets after burning the right amount of $PEDRO.
+
+    Body: { address, tickets, tx_hash }
+    Burn amount must equal `tickets * cost_per_ticket`. Cost is determined
+    server-side from the buyer's current NFT holdings — clients can't
+    haggle their way to the holder discount."""
+    if request.method != 'POST':
+        return json_response({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return json_response({'error': 'Invalid JSON'}, status=400)
+
+    address = (body.get('address') or '').strip()
+    tickets = body.get('tickets')
+    tx_hash = (body.get('tx_hash') or '').strip()
+
+    if not address.startswith('inj1') or not tx_hash:
+        return json_response({'error': 'Missing or invalid fields'}, status=400)
+    if not isinstance(tickets, int) or tickets < 1 or tickets > 1000:
+        return json_response(
+            {'error': 'Tickets must be an integer between 1 and 1000'},
+            status=400,
+        )
+
+    if RafflePurchase.objects.filter(tx_hash=tx_hash).exists():
+        return json_response({'error': 'Tx hash already used'}, status=409)
+
+    cost_per_ticket = _ticket_cost_for(address)
+    expected_burn = tickets * cost_per_ticket
+
+    ok, reason = GameVerifier.verify_pedro_burn(tx_hash, address, expected_burn)
+    if not ok:
+        return json_response(
+            {'error': f'Burn verification failed: {reason}'},
+            status=400,
+        )
+
+    week = _current_week()
+    new_tickets = [
+        RaffleTicket(
+            week=week,
+            address=address,
+            source=RaffleTicket.SOURCE_PAID,
+            tx_hash=tx_hash,
+        )
+        for _ in range(tickets)
+    ]
+    RaffleTicket.objects.bulk_create(new_tickets)
+    try:
+        RafflePurchase.objects.create(
+            tx_hash=tx_hash,
+            address=address,
+            week=week,
+            tickets=tickets,
+            pedro_burned=expected_burn,
+        )
+    except IntegrityError:
+        # Lost the race — another request just consumed this tx_hash.
+        # Roll back the tickets we just created so they aren't double-credited.
+        RaffleTicket.objects.filter(week=week, address=address, tx_hash=tx_hash).delete()
+        return json_response({'error': 'Tx hash already used'}, status=409)
+
+    return json_response({
+        'ok': True,
+        'tickets_added': tickets,
+        'pedro_burned': expected_burn,
+        'week': week,
+        'my_tickets': _serialize_my_tickets(address, week),
+    })
+
+
+def raffle_history(request):
+    """Past weekly winners + payout status."""
+    rows = RaffleResult.objects.all()[:24]
+    return json_response({
+        'results': [
+            {
+                'week': r.week,
+                'winning_address': r.winning_address,
+                'winning_ticket_id': r.winning_ticket_id,
+                'winning_name': r.winning_name,
+                'ticket_count': r.ticket_count,
+                'payout_tx_hash': r.payout_tx_hash,
+                'picked_at': r.picked_at.isoformat(),
+            }
+            for r in rows
+        ],
     })
 
 
