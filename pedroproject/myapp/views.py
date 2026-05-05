@@ -1149,8 +1149,12 @@ def raffle_current(request, address):
 
 @csrf_exempt
 def raffle_claim_free(request):
-    """One-shot per week per wallet: grants `nft_count` free raffle tickets
-    based on the wallet's current Pedro NFT count."""
+    """One-shot per week per wallet: grants `nft_count` free raffle tickets.
+    Requires a 1 $PEDRO burn from the claimer's wallet — proof of wallet
+    control + Sybil resistance, even though the tickets themselves are free.
+
+    Body: { address, tx_hash }
+    """
     if request.method != 'POST':
         return json_response({'error': 'POST only'}, status=405)
     try:
@@ -1159,8 +1163,16 @@ def raffle_claim_free(request):
         return json_response({'error': 'Invalid JSON'}, status=400)
 
     address = (body.get('address') or '').strip()
-    if not address.startswith('inj1'):
-        return json_response({'error': 'Invalid address'}, status=400)
+    tx_hash = (body.get('tx_hash') or '').strip()
+    if not address.startswith('inj1') or not tx_hash:
+        return json_response({'error': 'Missing or invalid fields'}, status=400)
+
+    # Replay protection — same tx_hash can't be reused across weeks/claims.
+    if (
+        RaffleFreeClaim.objects.filter(tx_hash=tx_hash).exists()
+        or RafflePurchase.objects.filter(tx_hash=tx_hash).exists()
+    ):
+        return json_response({'error': 'Tx hash already used'}, status=409)
 
     week = _current_week()
     nft_count = _fetch_pedro_nft_count(address)
@@ -1176,21 +1188,37 @@ def raffle_claim_free(request):
             status=409,
         )
 
+    ok, reason = GameVerifier.verify_pedro_burn(tx_hash, address, 1)
+    if not ok:
+        return json_response(
+            {'error': f'Burn verification failed: {reason}'},
+            status=400,
+        )
+
     new_tickets = [
         RaffleTicket(
             week=week,
             address=address,
             source=RaffleTicket.SOURCE_FREE,
+            tx_hash=tx_hash,
         )
         for _ in range(nft_count)
     ]
     RaffleTicket.objects.bulk_create(new_tickets)
-    RaffleFreeClaim.objects.create(
-        address=address,
-        week=week,
-        nft_count_at_claim=nft_count,
-        tickets_granted=nft_count,
-    )
+    try:
+        RaffleFreeClaim.objects.create(
+            address=address,
+            week=week,
+            nft_count_at_claim=nft_count,
+            tickets_granted=nft_count,
+            tx_hash=tx_hash,
+        )
+    except IntegrityError:
+        # Race lost — another request just consumed this tx_hash. Roll back.
+        RaffleTicket.objects.filter(
+            week=week, address=address, tx_hash=tx_hash, source=RaffleTicket.SOURCE_FREE,
+        ).delete()
+        return json_response({'error': 'Tx hash already used'}, status=409)
 
     return json_response({
         'ok': True,

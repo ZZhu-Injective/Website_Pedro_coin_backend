@@ -59,11 +59,13 @@ class RaffleTicket(models.Model):
 class RaffleFreeClaim(models.Model):
     """Records that an NFT holder has used their free ticket allowance for a
     given week. Enforced by `unique_together` so each wallet can claim at
-    most once per week."""
+    most once per week. The `tx_hash` is a 1 $PEDRO burn from the claimer's
+    wallet — used as proof of wallet control (and as Sybil resistance)."""
     address = models.CharField(max_length=64, db_index=True)
     week = models.CharField(max_length=10, db_index=True)
     nft_count_at_claim = models.IntegerField()
     tickets_granted = models.IntegerField()
+    tx_hash = models.CharField(max_length=128, unique=True, null=True, db_index=True)
     claimed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
