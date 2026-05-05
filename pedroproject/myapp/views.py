@@ -66,21 +66,25 @@ _NFT_COUNT_CACHE: dict[str, tuple[int, float]] = {}
 _NFT_COUNT_TTL_SECONDS = 600  # 10 minutes — NFTs don't move every second.
 
 
-def _nft_multiplier_bps(count: int) -> int:
-    """Returns a multiplier in basis points (100 = 1.0×) so the steal math
-    can stay integer-only on the server side. Tiered so a single NFT already
-    matters but ownership of many caps out at 2×."""
-    if count >= 25:
-        return 200
-    if count >= 10:
-        return 175
-    if count >= 5:
-        return 150
-    if count >= 3:
-        return 125
-    if count >= 1:
-        return 110
-    return 100
+# Crit table: (cumulative threshold, multiplier). Roll random in [0,1); the
+# first row whose threshold is greater than the roll wins. Holding one NFT or
+# a thousand makes no difference — only eligibility matters, by design.
+_NFT_CRIT_TABLE = (
+    (0.005, 10),  # 0.5% → 10×
+    (0.035, 5),   # 3.0% → 5×  (cumulative 3.5%)
+    (0.135, 2),   # 10.0% → 2× (cumulative 13.5%)
+)
+
+
+def _roll_nft_crit() -> int:
+    """Returns 1 (no crit) or a crit multiplier (2/5/10). Caller should only
+    invoke this when the user holds at least one Pedro NFT."""
+    import random
+    r = random.random()
+    for threshold, mult in _NFT_CRIT_TABLE:
+        if r < threshold:
+            return mult
+    return 1
 
 
 def _fetch_pedro_nft_count(address: str) -> int:
@@ -920,18 +924,17 @@ def game_upgrades_set(request):
 
 
 def game_nft_status(request, address):
-    """Returns the wallet's current Pedro NFT count + the multiplier the
-    server will apply to game actions. Cached server-side for ~10 min."""
+    """Returns the wallet's Pedro NFT count and whether they're crit-eligible.
+    Holding one NFT enables the same crit chance as holding many — only
+    eligibility matters. Cached server-side for ~10 min."""
     address = (address or '').strip()
     if not address.startswith('inj1'):
         return json_response({'error': 'Invalid address'}, status=400)
     count = _fetch_pedro_nft_count(address)
-    bps = _nft_multiplier_bps(count)
     return json_response({
         'address': address,
         'nft_count': count,
-        'multiplier_bps': bps,
-        'multiplier': bps / 100,
+        'crit_eligible': count >= 1,
     })
 
 
@@ -984,10 +987,11 @@ def game_steal(request):
         )
 
     base_amount = STEAL_BASE_AMOUNT * (2 ** attacker.steal_level)
-    # NFT multiplier — Pedro NFT holders steal more.
+    # NFT crit — Pedro NFT holders get random 2×/5×/10× steal hits. Holding
+    # a single NFT is enough; holding more does NOT improve odds.
     nft_count = _fetch_pedro_nft_count(attacker_addr)
-    multiplier_bps = _nft_multiplier_bps(nft_count)
-    steal_amount = (base_amount * multiplier_bps) // 100
+    crit_multiplier = _roll_nft_crit() if nft_count >= 1 else 1
+    steal_amount = base_amount * crit_multiplier
     actual = min(steal_amount, target.score)
 
     target.score -= actual
@@ -1006,6 +1010,7 @@ def game_steal(request):
     return json_response({
         'ok': True,
         'stolen': actual,
+        'crit': crit_multiplier,
         'attacker_score': attacker.score,
         'target_score': target.score,
         'cooldown_seconds': STEAL_COOLDOWN_SECONDS,
