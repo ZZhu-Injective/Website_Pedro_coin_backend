@@ -49,7 +49,7 @@ from .models import (
     GovernanceMonthResult,
     DashboardTxLog,
 )
-from .injective_game import GameVerifier
+from .injective_game import GameVerifier, INJECTIVE_LCD
 from .injective_governance import GovernanceVerifier, VALID_CHOICES
 from .injective_dashboard_logs import DashboardLogVerifier, FEATURE_MEMOS
 
@@ -60,6 +60,69 @@ GAME_MAX_LEVEL = 1000
 STEAL_BASE_AMOUNT = 100
 # Server-side cooldown so a spammed button can't drain a target instantly.
 STEAL_COOLDOWN_SECONDS = 30 * 60
+
+
+_NFT_COUNT_CACHE: dict[str, tuple[int, float]] = {}
+_NFT_COUNT_TTL_SECONDS = 600  # 10 minutes — NFTs don't move every second.
+
+
+def _nft_multiplier_bps(count: int) -> int:
+    """Returns a multiplier in basis points (100 = 1.0×) so the steal math
+    can stay integer-only on the server side. Tiered so a single NFT already
+    matters but ownership of many caps out at 2×."""
+    if count >= 25:
+        return 200
+    if count >= 10:
+        return 175
+    if count >= 5:
+        return 150
+    if count >= 3:
+        return 125
+    if count >= 1:
+        return 110
+    return 100
+
+
+def _fetch_pedro_nft_count(address: str) -> int:
+    """Counts how many Pedro NFTs `address` owns by paging the standard CW721
+    `tokens(owner)` query against the Injective LCD. Cached in-process for
+    `_NFT_COUNT_TTL_SECONDS` so the game endpoints don't hammer LCD."""
+    cached = _NFT_COUNT_CACHE.get(address)
+    if cached and (time.time() - cached[1]) < _NFT_COUNT_TTL_SECONDS:
+        return cached[0]
+
+    import base64
+    total = 0
+    start_after: str | None = None
+    # Safety cap: 20 pages × 100 = 2000 tokens. More than any realistic holder.
+    for _ in range(20):
+        query: dict = {'tokens': {'owner': address, 'limit': 100}}
+        if start_after:
+            query['tokens']['start_after'] = start_after
+        encoded = base64.b64encode(
+            json.dumps(query, separators=(',', ':')).encode()
+        ).decode()
+        url = (
+            f"{INJECTIVE_LCD}/cosmwasm/wasm/v1/contract/"
+            f"{PEDRO_NFT_CONTRACT}/smart/{encoded}"
+        )
+        try:
+            import requests
+            resp = requests.get(url, timeout=8)
+            if resp.status_code != 200:
+                break
+            tokens = resp.json().get('data', {}).get('tokens', []) or []
+        except Exception:
+            break
+        if not tokens:
+            break
+        total += len(tokens)
+        if len(tokens) < 100:
+            break
+        start_after = tokens[-1]
+
+    _NFT_COUNT_CACHE[address] = (total, time.time())
+    return total
 
 
 def _locked_name_for(address: str) -> str:
@@ -856,6 +919,22 @@ def game_upgrades_set(request):
     return json_response({'ok': True})
 
 
+def game_nft_status(request, address):
+    """Returns the wallet's current Pedro NFT count + the multiplier the
+    server will apply to game actions. Cached server-side for ~10 min."""
+    address = (address or '').strip()
+    if not address.startswith('inj1'):
+        return json_response({'error': 'Invalid address'}, status=400)
+    count = _fetch_pedro_nft_count(address)
+    bps = _nft_multiplier_bps(count)
+    return json_response({
+        'address': address,
+        'nft_count': count,
+        'multiplier_bps': bps,
+        'multiplier': bps / 100,
+    })
+
+
 @csrf_exempt
 def game_steal(request):
     """
@@ -904,7 +983,11 @@ def game_steal(request):
             status=400,
         )
 
-    steal_amount = STEAL_BASE_AMOUNT * (2 ** attacker.steal_level)
+    base_amount = STEAL_BASE_AMOUNT * (2 ** attacker.steal_level)
+    # NFT multiplier — Pedro NFT holders steal more.
+    nft_count = _fetch_pedro_nft_count(attacker_addr)
+    multiplier_bps = _nft_multiplier_bps(nft_count)
+    steal_amount = (base_amount * multiplier_bps) // 100
     actual = min(steal_amount, target.score)
 
     target.score -= actual

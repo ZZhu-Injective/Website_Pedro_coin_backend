@@ -43,6 +43,7 @@ urlpatterns = [
     path('game/upgrades/', views.game_upgrades_set, name='game_upgrades_set'),
     path('game/upgrades/<str:address>/', views.game_upgrades_get, name='game_upgrades_get'),
     path('game/steal/', views.game_steal, name='game_steal'),
+    path('game/nft/<str:address>/', views.game_nft_status, name='game_nft_status'),
 
     path('governance/vote/', views.governance_vote, name='governance_vote'),
     path('governance/current/', views.governance_current, name='governance_current'),
