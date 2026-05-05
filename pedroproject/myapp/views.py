@@ -62,8 +62,10 @@ STEAL_BASE_AMOUNT = 100
 STEAL_COOLDOWN_SECONDS = 30 * 60
 
 
-_NFT_COUNT_CACHE: dict[str, tuple[int, float]] = {}
-_NFT_COUNT_TTL_SECONDS = 600  # 10 minutes — NFTs don't move every second.
+_NFT_HOLDERS_CACHE: dict[str, int] = {}
+_NFT_HOLDERS_CACHE_AT: float = 0.0
+_NFT_HOLDERS_TTL_SECONDS = 600  # 10 minutes — NFTs don't move every second.
+_NFT_HOLDERS_LOCK = threading.Lock()
 
 
 # Crit table: (cumulative threshold, multiplier). Roll random in [0,1); the
@@ -87,46 +89,80 @@ def _roll_nft_crit() -> int:
     return 1
 
 
-def _fetch_pedro_nft_count(address: str) -> int:
-    """Counts how many Pedro NFTs `address` owns by paging the standard CW721
-    `tokens(owner)` query against the Injective LCD. Cached in-process for
-    `_NFT_COUNT_TTL_SECONDS` so the game endpoints don't hammer LCD."""
-    cached = _NFT_COUNT_CACHE.get(address)
-    if cached and (time.time() - cached[1]) < _NFT_COUNT_TTL_SECONDS:
-        return cached[0]
+def _refresh_nft_holders() -> None:
+    """Walks the full Pedro NFT contract state and rebuilds the
+    address->count map. Called on cold cache or after TTL expiry. Cold
+    refresh can take a few seconds — concurrent callers block on the lock
+    so only one refetch happens at a time.
 
+    Uses the same approach as `AApedro_verify_all_webpage.fetch_holder_nft`
+    (raw contract-state scan) because the standard CW721 `tokens(owner)`
+    query doesn't return correct counts on this particular contract."""
+    global _NFT_HOLDERS_CACHE, _NFT_HOLDERS_CACHE_AT
     import base64
-    total = 0
-    start_after: str | None = None
-    # Safety cap: 20 pages × 100 = 2000 tokens. More than any realistic holder.
-    for _ in range(20):
-        query: dict = {'tokens': {'owner': address, 'limit': 100}}
-        if start_after:
-            query['tokens']['start_after'] = start_after
-        encoded = base64.b64encode(
-            json.dumps(query, separators=(',', ':')).encode()
-        ).decode()
+    import requests
+
+    counts: dict[str, int] = {}
+    next_key: str | None = None
+    pages = 0
+
+    while pages < 200:  # safety cap; supports up to ~200k state entries
+        pages += 1
+        params: dict[str, str] = {'pagination.limit': '1000'}
+        if next_key:
+            params['pagination.key'] = next_key
         url = (
             f"{INJECTIVE_LCD}/cosmwasm/wasm/v1/contract/"
-            f"{PEDRO_NFT_CONTRACT}/smart/{encoded}"
+            f"{PEDRO_NFT_CONTRACT}/state"
         )
         try:
-            import requests
-            resp = requests.get(url, timeout=8)
+            resp = requests.get(url, params=params, timeout=30)
             if resp.status_code != 200:
+                logger.warning(
+                    "NFT state fetch returned %s on page %s",
+                    resp.status_code, pages,
+                )
                 break
-            tokens = resp.json().get('data', {}).get('tokens', []) or []
-        except Exception:
+            data = resp.json()
+        except Exception as e:
+            logger.warning("NFT state fetch failed on page %s: %s", pages, e)
             break
-        if not tokens:
-            break
-        total += len(tokens)
-        if len(tokens) < 100:
-            break
-        start_after = tokens[-1]
 
-    _NFT_COUNT_CACHE[address] = (total, time.time())
-    return total
+        for model in data.get('models') or []:
+            try:
+                value = model.get('value')
+                if not value:
+                    continue
+                decoded = base64.b64decode(value).decode('utf-8')
+                obj = json.loads(decoded)
+            except Exception:
+                continue
+            owner = obj.get('owner') if isinstance(obj, dict) else None
+            token_id = obj.get('token_id') if isinstance(obj, dict) else None
+            # Token records have BOTH owner and token_id; other state entries
+            # (config, minter, etc.) don't and get skipped.
+            if owner and token_id:
+                counts[owner] = counts.get(owner, 0) + 1
+
+        next_key = (data.get('pagination') or {}).get('next_key')
+        if not next_key:
+            break
+
+    _NFT_HOLDERS_CACHE = counts
+    _NFT_HOLDERS_CACHE_AT = time.time()
+    logger.info(
+        "NFT holders refreshed: %s holders, %s tokens, %s pages",
+        len(counts), sum(counts.values()), pages,
+    )
+
+
+def _fetch_pedro_nft_count(address: str) -> int:
+    """Returns the number of Pedro NFTs the given address holds. Backed by a
+    single global contract-state scan cached for `_NFT_HOLDERS_TTL_SECONDS`."""
+    with _NFT_HOLDERS_LOCK:
+        if (time.time() - _NFT_HOLDERS_CACHE_AT) > _NFT_HOLDERS_TTL_SECONDS:
+            _refresh_nft_holders()
+    return _NFT_HOLDERS_CACHE.get(address, 0)
 
 
 def _locked_name_for(address: str) -> str:
