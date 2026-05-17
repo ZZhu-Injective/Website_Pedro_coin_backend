@@ -49,6 +49,7 @@ urlpatterns = [
     path('raffle/claim_free/', views.raffle_claim_free, name='raffle_claim_free'),
     path('raffle/buy/', views.raffle_buy, name='raffle_buy'),
     path('raffle/history/', views.raffle_history, name='raffle_history'),
+    path('raffle/admin/set_payout/', views.raffle_admin_set_payout, name='raffle_admin_set_payout'),
 
     path('governance/vote/', views.governance_vote, name='governance_vote'),
     path('governance/current/', views.governance_current, name='governance_current'),

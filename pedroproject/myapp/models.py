@@ -65,7 +65,7 @@ class RaffleFreeClaim(models.Model):
     week = models.CharField(max_length=10, db_index=True)
     nft_count_at_claim = models.IntegerField()
     tickets_granted = models.IntegerField()
-    tx_hash = models.CharField(max_length=128, unique=True, null=True, db_index=True)
+    tx_hash = models.CharField(max_length=128, unique=True, null=True)
     claimed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

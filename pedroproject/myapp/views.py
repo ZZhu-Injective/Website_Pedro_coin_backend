@@ -1,6 +1,7 @@
 import asyncio
 from asyncio.log import logger
 import json
+import os
 import threading
 import time
 
@@ -59,6 +60,14 @@ from .injective_dashboard_logs import DashboardLogVerifier, FEATURE_MEMOS
 
 GAME_MAX_SCORE = 100_000_000
 GAME_MAX_LEVEL = 1000
+
+# Raffle admins — comma-separated inj1 addresses in the RAFFLE_ADMIN_ADDRESSES
+# env var. Only these wallets can call /raffle/admin/set_payout/.
+RAFFLE_ADMIN_ADDRESSES = {
+    a.strip().lower()
+    for a in (os.getenv('RAFFLE_ADMIN_ADDRESSES', '') or '').split(',')
+    if a.strip()
+}
 
 # Steal feature: amount = STEAL_BASE * 2^level. Default level 0 ⇒ 100 points.
 STEAL_BASE_AMOUNT = 100
@@ -1318,6 +1327,56 @@ def raffle_history(request):
             }
             for r in rows
         ],
+    })
+
+
+@csrf_exempt
+def raffle_admin_set_payout(request):
+    """Admin-only: set or clear payout_tx_hash on a past raffle week.
+
+    Authorization is by allowlist — admin_address in the request body must
+    match one of the entries in the RAFFLE_ADMIN_ADDRESSES env var. The UI
+    on the frontend gates which wallet can see the Edit button, but every
+    request is still re-checked here.
+    """
+    if request.method != 'POST':
+        return json_response({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return json_response({'error': 'Invalid JSON'}, status=400)
+
+    admin_address = (body.get('admin_address') or '').strip()
+    week = (body.get('week') or '').strip()
+    tx_hash = (body.get('tx_hash') or '').strip()
+
+    if not admin_address.startswith('inj1'):
+        return json_response({'error': 'Missing admin_address'}, status=400)
+
+    if not RAFFLE_ADMIN_ADDRESSES:
+        return json_response(
+            {'error': 'No admin addresses configured on the server'},
+            status=503,
+        )
+
+    if admin_address.lower() not in RAFFLE_ADMIN_ADDRESSES:
+        return json_response({'error': 'Not authorized'}, status=403)
+
+    if not week:
+        return json_response({'error': 'Missing week'}, status=400)
+
+    try:
+        result = RaffleResult.objects.get(week=week)
+    except RaffleResult.DoesNotExist:
+        return json_response({'error': f'No raffle result for week {week}'}, status=404)
+
+    result.payout_tx_hash = tx_hash[:128]
+    result.save(update_fields=['payout_tx_hash'])
+
+    return json_response({
+        'ok': True,
+        'week': result.week,
+        'payout_tx_hash': result.payout_tx_hash,
     })
 
 
