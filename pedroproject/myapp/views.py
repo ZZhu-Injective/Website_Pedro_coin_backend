@@ -7,6 +7,7 @@ import time
 
 from dotenv import load_dotenv
 
+from django.core.cache import cache
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
@@ -78,9 +79,13 @@ STEAL_COOLDOWN_SECONDS = 6 * 60 * 60
 STEAL_MAX_LEVEL = 12
 
 
-_NFT_HOLDERS_CACHE: dict[str, int] = {}
-_NFT_HOLDERS_CACHE_AT: float = 0.0
+# Shared across all workers via the database cache (see settings.CACHES).
+# Value is a dict[str, int] mapping inj1 address -> Pedro NFT count.
+_NFT_HOLDERS_CACHE_KEY = 'pedro_nft_holders_v1'
 _NFT_HOLDERS_TTL_SECONDS = 600  # 10 minutes — NFTs don't move every second.
+# Within a single worker, serialize the refresh so we don't do the multi-page
+# state scan twice in parallel when the cache is cold. Cross-worker races are
+# fine — at worst two workers refresh concurrently and the last write wins.
 _NFT_HOLDERS_LOCK = threading.Lock()
 
 
@@ -105,16 +110,15 @@ def _roll_nft_crit() -> int:
     return 1
 
 
-def _refresh_nft_holders() -> None:
+def _refresh_nft_holders() -> dict[str, int]:
     """Walks the full Pedro NFT contract state and rebuilds the
     address->count map. Called on cold cache or after TTL expiry. Cold
-    refresh can take a few seconds — concurrent callers block on the lock
-    so only one refetch happens at a time.
+    refresh can take a few seconds — concurrent callers in the same worker
+    block on the lock so only one refetch happens at a time.
 
     Uses the same approach as `AApedro_verify_all_webpage.fetch_holder_nft`
     (raw contract-state scan) because the standard CW721 `tokens(owner)`
     query doesn't return correct counts on this particular contract."""
-    global _NFT_HOLDERS_CACHE, _NFT_HOLDERS_CACHE_AT
     import base64
     import requests
 
@@ -164,21 +168,28 @@ def _refresh_nft_holders() -> None:
         if not next_key:
             break
 
-    _NFT_HOLDERS_CACHE = counts
-    _NFT_HOLDERS_CACHE_AT = time.time()
+    # Write to the shared (database-backed) cache so all gunicorn workers see
+    # the same value for the next _NFT_HOLDERS_TTL_SECONDS.
+    cache.set(_NFT_HOLDERS_CACHE_KEY, counts, _NFT_HOLDERS_TTL_SECONDS)
     logger.info(
         "NFT holders refreshed: %s holders, %s tokens, %s pages",
         len(counts), sum(counts.values()), pages,
     )
+    return counts
 
 
 def _fetch_pedro_nft_count(address: str) -> int:
-    """Returns the number of Pedro NFTs the given address holds. Backed by a
-    single global contract-state scan cached for `_NFT_HOLDERS_TTL_SECONDS`."""
-    with _NFT_HOLDERS_LOCK:
-        if (time.time() - _NFT_HOLDERS_CACHE_AT) > _NFT_HOLDERS_TTL_SECONDS:
-            _refresh_nft_holders()
-    return _NFT_HOLDERS_CACHE.get(address, 0)
+    """Returns the number of Pedro NFTs the given address holds. Backed by
+    Django's database cache so the value is shared across all workers."""
+    counts = cache.get(_NFT_HOLDERS_CACHE_KEY)
+    if counts is None:
+        with _NFT_HOLDERS_LOCK:
+            # Re-check after acquiring the lock — another thread in this
+            # worker may have populated the cache while we were waiting.
+            counts = cache.get(_NFT_HOLDERS_CACHE_KEY)
+            if counts is None:
+                counts = _refresh_nft_holders()
+    return counts.get(address, 0)
 
 
 def _locked_name_for(address: str) -> str:
@@ -831,6 +842,15 @@ def game_submit_score(request):
         )
     except IntegrityError:
         return json_response({'error': 'Tx hash already used'}, status=409)
+
+    # Bank the submitted score into the wallet's persisted "saved" score so
+    # the next page load reflects what was just submitted. Upgrades / steal
+    # spend from this same field, so it has to stay in sync with leaderboard
+    # submits. We never lower it here — a stale resubmission won't erase a
+    # higher saved score earned via stealing.
+    GameUpgradeState.objects.filter(address=address, score__lte=score).update(
+        score=score,
+    )
 
     return json_response({
         'ok': True,

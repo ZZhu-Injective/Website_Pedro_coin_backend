@@ -72,6 +72,17 @@ DATABASES = {
     ),
 }
 
+# Shared cache backed by the existing database. Survives across gunicorn
+# workers, so the Pedro-NFT holder map seen by /raffle, /game, and /governance
+# is identical regardless of which worker handled the request. Run
+# `python manage.py createcachetable` once after deploying this change.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'django_cache',
+    },
+}
+
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 AUTH_PASSWORD_VALIDATORS = [
