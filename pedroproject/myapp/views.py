@@ -203,16 +203,15 @@ def _fetch_pedro_nft_count(address: str) -> int:
 def _locked_name_for(address: str) -> str:
     """Returns the canonical display name for an address (the name used on
     its first leaderboard submission), or '' if the address has never
-    submitted. Used both to enforce the lock on subsequent submits and to
-    let the frontend prefill+disable the name field."""
-    first = (
-        GameLeaderboardEntry.objects
+    submitted. Cached on GameUpgradeState.locked_name so it survives the
+    monthly leaderboard wipe."""
+    return (
+        GameUpgradeState.objects
         .filter(address=address)
-        .order_by('submitted_at', 'id')
-        .values_list('name', flat=True)
+        .values_list('locked_name', flat=True)
         .first()
+        or ''
     )
-    return first or ''
 
 PEDRO_NFT_CONTRACT = 'inj1uq453kp4yda7ruc0axpmd9vzfm0fj62padhe0p'
 
@@ -226,6 +225,63 @@ GOVERNANCE_EXCLUDED_ADDRESSES = {
 
 def _current_month():
     return datetime.now(timezone.utc).strftime('%Y-%m')
+
+
+def _ensure_month_rolled_over(current_month: str) -> None:
+    """Lazy month-end housekeeping: snapshot every past-month winner into
+    GameMonthPayout (the Hall of Fame record), then delete the now-stale
+    leaderboard rows for that month. Idempotent — running it twice does
+    nothing the second time."""
+    past_months = list(
+        GameLeaderboardEntry.objects
+        .exclude(month=current_month)
+        .values_list('month', flat=True)
+        .distinct()
+    )
+    if not past_months:
+        return
+    for month in past_months:
+        top = (
+            GameLeaderboardEntry.objects
+            .filter(month=month)
+            .order_by('-score', 'submitted_at', 'id')
+            .first()
+        )
+        if top:
+            payout, _ = GameMonthPayout.objects.get_or_create(month=month)
+            # Only fill the winner snapshot the first time — subsequent calls
+            # must not clobber it, and an admin-set payout_tx_hash must
+            # survive untouched.
+            if not payout.winning_address:
+                canonical = _locked_name_for(top.address) or top.name
+                payout.winning_address = top.address
+                payout.winning_name = (canonical or '')[:64]
+                payout.winning_score = top.score
+                payout.winning_tx_hash = top.tx_hash
+                payout.save(update_fields=[
+                    'winning_address', 'winning_name',
+                    'winning_score', 'winning_tx_hash', 'updated_at',
+                ])
+        GameLeaderboardEntry.objects.filter(month=month).delete()
+
+
+def _reset_upgrade_state_if_needed(state, current_month: str) -> bool:
+    """Wipes click/auto/steal levels, score, and steal cooldown when the
+    state row is from a previous month. Preserves `locked_name` so wallet
+    identity stays stable forever. Returns True if a reset happened."""
+    if state.current_month == current_month:
+        return False
+    state.click_level = 0
+    state.auto_level = 0
+    state.steal_level = 0
+    state.score = 0
+    state.last_steal_at = None
+    state.current_month = current_month
+    state.save(update_fields=[
+        'click_level', 'auto_level', 'steal_level',
+        'score', 'last_steal_at', 'current_month', 'updated_at',
+    ])
+    return True
 
 
 def _run_async(coro_factory):
@@ -834,6 +890,9 @@ def game_submit_score(request):
     if not ok:
         return json_response({'error': f'Burn verification failed: {reason}'}, status=400)
 
+    current_month = _current_month()
+    _ensure_month_rolled_over(current_month)
+
     # If the wallet has submitted before, force the original display name so
     # everyone sees consistent identity across submissions / steal targeting.
     locked = _locked_name_for(address)
@@ -846,10 +905,21 @@ def game_submit_score(request):
             name=name,
             score=score,
             tx_hash=tx_hash,
-            month=_current_month(),
+            month=current_month,
         )
     except IntegrityError:
         return json_response({'error': 'Tx hash already used'}, status=409)
+
+    # First submission for this wallet locks the display name forever — even
+    # after monthly resets wipe their levels, the canonical name stays.
+    state, _ = GameUpgradeState.objects.get_or_create(
+        address=address,
+        defaults={'current_month': current_month},
+    )
+    _reset_upgrade_state_if_needed(state, current_month)
+    if not state.locked_name:
+        state.locked_name = name[:64]
+        state.save(update_fields=['locked_name', 'updated_at'])
 
     # Bank the submitted score into the wallet's persisted "saved" score so
     # the next page load reflects what was just submitted. Upgrades / steal
@@ -870,6 +940,7 @@ def game_submit_score(request):
 
 def game_leaderboard(request):
     month = _current_month()
+    _ensure_month_rolled_over(month)
     # Dedup by address — only keep the highest score per wallet. Because the
     # base queryset is already sorted by score desc, the first time we see an
     # address is also its highest entry for the month.
@@ -909,32 +980,26 @@ def game_leaderboard(request):
 
 def game_hall_of_fame(request):
     current = _current_month()
-    months = (
-        GameLeaderboardEntry.objects
+    # Trigger the lazy snapshot in case this is the first request of a new
+    # month — otherwise the just-ended month's winner wouldn't appear yet.
+    _ensure_month_rolled_over(current)
+    payouts = (
+        GameMonthPayout.objects
         .exclude(month=current)
-        .values_list('month', flat=True)
-        .distinct()
+        .exclude(winning_address='')
         .order_by('-month')
     )
-    winners = []
-    for month in months:
-        top = (
-            GameLeaderboardEntry.objects
-            .filter(month=month)
-            .order_by('-score', 'submitted_at')
-            .first()
-        )
-        if top:
-            canonical = _locked_name_for(top.address) or top.name
-            payout = GameMonthPayout.objects.filter(month=top.month).first()
-            winners.append({
-                'month': top.month,
-                'name': canonical,
-                'address': top.address,
-                'score': top.score,
-                'tx_hash': top.tx_hash,
-                'payout_tx_hash': payout.payout_tx_hash if payout else '',
-            })
+    winners = [
+        {
+            'month': p.month,
+            'name': _locked_name_for(p.winning_address) or p.winning_name,
+            'address': p.winning_address,
+            'score': p.winning_score,
+            'tx_hash': p.winning_tx_hash,
+            'payout_tx_hash': p.payout_tx_hash,
+        }
+        for p in payouts
+    ]
     return json_response({'winners': winners})
 
 
@@ -942,9 +1007,10 @@ def game_upgrades_get(request, address):
     address = (address or '').strip()
     if not address.startswith('inj1'):
         return json_response({'error': 'Invalid address'}, status=400)
-    locked_name = _locked_name_for(address)
+    current_month = _current_month()
     try:
         state = GameUpgradeState.objects.get(address=address)
+        _reset_upgrade_state_if_needed(state, current_month)
         return json_response({
             'address': state.address,
             'click_level': state.click_level,
@@ -952,7 +1018,7 @@ def game_upgrades_get(request, address):
             'steal_level': state.steal_level,
             'score': state.score,
             'last_steal_at': state.last_steal_at.isoformat() if state.last_steal_at else None,
-            'locked_name': locked_name,
+            'locked_name': state.locked_name,
             'updated_at': state.updated_at.isoformat(),
         })
     except GameUpgradeState.DoesNotExist:
@@ -963,7 +1029,7 @@ def game_upgrades_get(request, address):
             'steal_level': 0,
             'score': 0,
             'last_steal_at': None,
-            'locked_name': locked_name,
+            'locked_name': '',
             'updated_at': None,
         })
 
@@ -995,15 +1061,31 @@ def game_upgrades_set(request):
     if not isinstance(score, int) or score < 0 or score > GAME_MAX_SCORE:
         return json_response({'error': 'Invalid score'}, status=400)
 
-    GameUpgradeState.objects.update_or_create(
+    current_month = _current_month()
+    state, created = GameUpgradeState.objects.get_or_create(
         address=address,
         defaults={
             'click_level': click_level,
             'auto_level': auto_level,
             'steal_level': steal_level,
             'score': score,
+            'current_month': current_month,
         },
     )
+    if not created:
+        # If the row is from a prior month, the user's local state is stale
+        # — wipe the row and ignore this sync. The frontend will pick up the
+        # zeros on its next GET. Returning `reset: true` lets a future client
+        # short-circuit its in-memory state too.
+        if _reset_upgrade_state_if_needed(state, current_month):
+            return json_response({'ok': True, 'reset': True})
+        state.click_level = click_level
+        state.auto_level = auto_level
+        state.steal_level = steal_level
+        state.score = score
+        state.save(update_fields=[
+            'click_level', 'auto_level', 'steal_level', 'score', 'updated_at',
+        ])
     return json_response({'ok': True})
 
 
@@ -1047,11 +1129,19 @@ def game_steal(request):
     if attacker_addr == target_addr:
         return json_response({'error': "You can't steal from yourself"}, status=400)
 
-    attacker, _ = GameUpgradeState.objects.get_or_create(address=attacker_addr)
+    current_month = _current_month()
+    _ensure_month_rolled_over(current_month)
+    attacker, attacker_created = GameUpgradeState.objects.get_or_create(
+        address=attacker_addr,
+        defaults={'current_month': current_month},
+    )
+    if not attacker_created:
+        _reset_upgrade_state_if_needed(attacker, current_month)
     try:
         target = GameUpgradeState.objects.get(address=target_addr)
     except GameUpgradeState.DoesNotExist:
         return json_response({'error': 'Target has no game state'}, status=404)
+    _reset_upgrade_state_if_needed(target, current_month)
 
     # Cooldown: time since last steal must exceed STEAL_COOLDOWN_SECONDS.
     now = datetime.now(timezone.utc)

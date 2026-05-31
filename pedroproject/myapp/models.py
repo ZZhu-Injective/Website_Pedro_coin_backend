@@ -23,6 +23,12 @@ class GameUpgradeState(models.Model):
     steal_level = models.IntegerField(default=0)
     score = models.BigIntegerField(default=0)
     last_steal_at = models.DateTimeField(null=True, blank=True)
+    # Canonical display name for this wallet — set on first leaderboard submit
+    # and preserved across month resets so identity is stable forever.
+    locked_name = models.CharField(max_length=64, blank=True, default='')
+    # Which YYYY-MM month these levels/score are valid for. When this differs
+    # from the live current month, the row is reset to zeros on next access.
+    current_month = models.CharField(max_length=7, blank=True, default='')
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -233,6 +239,13 @@ class SpecialVote(models.Model):
 
 class GameMonthPayout(models.Model):
     month = models.CharField(max_length=7, unique=True, db_index=True)
+    # Winner snapshot — captured when the month rolls over and the live
+    # leaderboard entries are deleted. This is the only Hall of Fame record
+    # that survives the wipe.
+    winning_address = models.CharField(max_length=64, blank=True, db_index=True)
+    winning_name = models.CharField(max_length=64, blank=True)
+    winning_score = models.BigIntegerField(default=0)
+    winning_tx_hash = models.CharField(max_length=128, blank=True)
     payout_tx_hash = models.CharField(max_length=128, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
