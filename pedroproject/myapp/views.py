@@ -1817,7 +1817,18 @@ def special_proposals_list(request):
 
 
 @csrf_exempt
+SPECIAL_PROPOSAL_BURN_PEDRO = 10_000
+
+
 def special_proposal_create(request):
+    """Create a new special yes/no proposal.
+
+    Authorization rules:
+      • PEDRO_ADMIN_ADDRESS may create for free.
+      • Any current-month NFT holder (per GovernanceVoterSnapshot) may create
+        by burning SPECIAL_PROPOSAL_BURN_PEDRO $PEDRO and submitting the tx
+        hash. Anti-spam gate — non-holders can't create even with a burn.
+    """
     if request.method != 'POST':
         return json_response({'error': 'POST only'}, status=405)
     try:
@@ -1825,9 +1836,54 @@ def special_proposal_create(request):
     except json.JSONDecodeError:
         return json_response({'error': 'Invalid JSON'}, status=400)
 
-    admin_address = (body.get('admin_address') or '').strip().lower()
-    if admin_address != PEDRO_ADMIN_ADDRESS:
-        return json_response({'error': 'Not authorized'}, status=403)
+    # `admin_address` and `creator_address` are accepted as aliases — older
+    # admin clients sent admin_address, new NFT-holder flow sends
+    # creator_address.
+    caller = (
+        body.get('creator_address')
+        or body.get('admin_address')
+        or ''
+    ).strip()
+    if not caller.startswith('inj1'):
+        return json_response({'error': 'Missing or invalid caller address'}, status=400)
+
+    is_admin = caller.lower() == PEDRO_ADMIN_ADDRESS
+    tx_hash = (body.get('tx_hash') or body.get('creation_tx_hash') or '').strip()
+
+    if not is_admin:
+        # Non-admin creators must be NFT holders this month AND burn the
+        # creation fee.
+        month = _current_month()
+        _ensure_snapshot(month)
+        snap = GovernanceVoterSnapshot.objects.filter(
+            month=month, address=caller,
+        ).first()
+        if not snap or snap.nft_count < 1:
+            return json_response(
+                {'error': 'Only Pedro NFT holders can create proposals'},
+                status=403,
+            )
+        if not tx_hash:
+            return json_response(
+                {
+                    'error': (
+                        f'Burn {SPECIAL_PROPOSAL_BURN_PEDRO} $PEDRO and submit '
+                        f'the tx hash to create a proposal'
+                    ),
+                },
+                status=400,
+            )
+        # Replay protection — reuse the same indexes the game/raffle use.
+        if SpecialProposal.objects.filter(creation_tx_hash=tx_hash).exists():
+            return json_response({'error': 'Tx hash already used'}, status=409)
+        ok, reason = GameVerifier.verify_pedro_burn(
+            tx_hash, caller, SPECIAL_PROPOSAL_BURN_PEDRO,
+        )
+        if not ok:
+            return json_response(
+                {'error': f'Burn verification failed: {reason}'},
+                status=400,
+            )
 
     title = (body.get('title') or '').strip()
     description = (body.get('description') or '').strip()
@@ -1855,8 +1911,16 @@ def special_proposal_create(request):
         is_active=True,
         start_date=date.today(),
         end_date=end_date,
+        creator_address='' if is_admin else caller,
+        creation_tx_hash='' if is_admin else tx_hash,
     )
-    return json_response({'ok': True, 'id': proposal.id, 'title': proposal.title})
+    return json_response({
+        'ok': True,
+        'id': proposal.id,
+        'title': proposal.title,
+        'creator_address': proposal.creator_address,
+        'creation_tx_hash': proposal.creation_tx_hash,
+    })
 
 
 @csrf_exempt

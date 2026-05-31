@@ -213,6 +213,10 @@ class SpecialProposal(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
+    # NFT holders pay a 10,000 $PEDRO burn to create a proposal — anti-spam
+    # gate. Admin proposals are free, in which case both fields are blank.
+    creator_address = models.CharField(max_length=64, blank=True, db_index=True)
+    creation_tx_hash = models.CharField(max_length=128, blank=True, db_index=True)
 
     class Meta:
         ordering = ['-start_date']
