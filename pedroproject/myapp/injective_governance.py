@@ -7,11 +7,17 @@ logger = logging.getLogger(__name__)
 INJECTIVE_LCD = "https://sentry.lcd.injective.network"
 MSG_SEND_TYPE = "/cosmos.bank.v1beta1.MsgSend"
 VOTE_MEMO_PREFIX = "pedro-vote"
+SPECIAL_VOTE_MEMO_PREFIX = "pedro-special"
 VALID_CHOICES = {"liquidity", "buy_nfts", "giveaway"}
+VALID_SPECIAL_CHOICES = {"yes", "no"}
 
 
 def expected_memo(month: str, choice: str) -> str:
     return f"{VOTE_MEMO_PREFIX}:{month}:{choice}"
+
+
+def expected_special_memo(proposal_id: int, choice: str) -> str:
+    return f"{SPECIAL_VOTE_MEMO_PREFIX}:{proposal_id}:{choice}"
 
 
 class GovernanceVerifier:
@@ -59,6 +65,46 @@ class GovernanceVerifier:
         # At least one MsgSend from the claimed voter must exist. Self-send
         # is the recommended pattern but we don't enforce destination — the
         # signer is what matters.
+        for msg in body.get("messages", []):
+            if msg.get("@type") != MSG_SEND_TYPE:
+                continue
+            if msg.get("from_address") == expected_from:
+                return True, "OK"
+
+        return False, "No MsgSend from the claimed voter in this tx"
+
+    @staticmethod
+    def verify_special_vote(tx_hash: str, expected_from: str, proposal_id: int, choice: str) -> tuple[bool, str]:
+        if not tx_hash or not expected_from:
+            return False, "Missing tx hash or address"
+        if choice not in VALID_SPECIAL_CHOICES:
+            return False, "Invalid choice (allowed: yes, no)"
+
+        url = f"{INJECTIVE_LCD}/cosmos/tx/v1beta1/txs/{tx_hash.upper()}"
+        try:
+            resp = requests.get(url, timeout=10)
+        except requests.RequestException as e:
+            logger.warning("LCD unreachable while verifying %s: %s", tx_hash, e)
+            return False, "Could not reach Injective LCD"
+
+        if resp.status_code != 200:
+            return False, f"Tx not found (status {resp.status_code})"
+
+        try:
+            data = resp.json()
+        except ValueError:
+            return False, "Invalid JSON from LCD"
+
+        tx_response = data.get("tx_response") or {}
+        if tx_response.get("code", -1) != 0:
+            return False, "Tx failed on chain"
+
+        body = (data.get("tx") or {}).get("body") or {}
+        memo = body.get("memo", "")
+        expected = expected_special_memo(proposal_id, choice)
+        if memo != expected:
+            return False, f"Memo mismatch (expected '{expected}', got '{memo}')"
+
         for msg in body.get("messages", []):
             if msg.get("@type") != MSG_SEND_TYPE:
                 continue

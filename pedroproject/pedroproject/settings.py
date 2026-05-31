@@ -64,12 +64,16 @@ WSGI_APPLICATION = 'pedroproject.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
+_db_url = os.getenv('DATABASE_URL')
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.getenv('DATABASE_URL'),
+        default=_db_url,
         conn_max_age=600,
         conn_health_checks=True,
-    ),
+    ) if _db_url else {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
 }
 
 # Shared cache backed by the existing database. Survives across gunicorn

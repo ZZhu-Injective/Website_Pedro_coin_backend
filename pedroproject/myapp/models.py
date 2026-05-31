@@ -198,6 +198,51 @@ class GovernanceMonthResult(models.Model):
         return f"{self.month} -> {self.winning_choice}"
 
 
+class SpecialProposal(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    choice_yes_label = models.CharField(max_length=64, default='Yes')
+    choice_no_label = models.CharField(max_length=64, default='No')
+    is_active = models.BooleanField(default=True, db_index=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return self.title
+
+
+class SpecialVote(models.Model):
+    proposal = models.ForeignKey(SpecialProposal, on_delete=models.CASCADE, related_name='votes')
+    address = models.CharField(max_length=64, db_index=True)
+    choice = models.CharField(max_length=8)  # 'yes' or 'no'
+    points = models.IntegerField()
+    tx_hash = models.CharField(max_length=128, unique=True, db_index=True)
+    voted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('proposal', 'address')]
+        ordering = ['-voted_at']
+
+    def __str__(self):
+        return f"Proposal {self.proposal_id} {self.address} -> {self.choice} ({self.points})"
+
+
+class GameMonthPayout(models.Model):
+    month = models.CharField(max_length=7, unique=True, db_index=True)
+    payout_tx_hash = models.CharField(max_length=128, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-month']
+
+    def __str__(self):
+        return f"{self.month} payout={'paid' if self.payout_tx_hash else 'pending'}"
+
+
 class TokenHolder(models.Model):
     address = models.CharField(max_length=255, unique=True)
     native_value = models.FloatField(default=0)

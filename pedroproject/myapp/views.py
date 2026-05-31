@@ -46,9 +46,12 @@ from .models import (
     GameLeaderboardEntry,
     GameUpgradeState,
     GameStealLog,
+    GameMonthPayout,
     GovernanceVoterSnapshot,
     GovernanceVote,
     GovernanceMonthResult,
+    SpecialProposal,
+    SpecialVote,
     DashboardTxLog,
     RaffleTicket,
     RaffleFreeClaim,
@@ -69,6 +72,11 @@ RAFFLE_ADMIN_ADDRESSES = {
     for a in (os.getenv('RAFFLE_ADMIN_ADDRESSES', '') or '').split(',')
     if a.strip()
 }
+
+# Pedro admin wallet — allowed to create special proposals and record game payouts
+PEDRO_ADMIN_ADDRESS = (
+    os.getenv('PEDRO_ADMIN_ADDRESS') or 'inj1x6u08aa3plhk3utjk7wpyjkurtwnwp6dhudh0j'
+).lower()
 
 # Steal feature: amount = STEAL_BASE * 2^level. Default level 0 ⇒ 100 points.
 STEAL_BASE_AMOUNT = 100
@@ -918,12 +926,14 @@ def game_hall_of_fame(request):
         )
         if top:
             canonical = _locked_name_for(top.address) or top.name
+            payout = GameMonthPayout.objects.filter(month=top.month).first()
             winners.append({
                 'month': top.month,
                 'name': canonical,
                 'address': top.address,
                 'score': top.score,
                 'tx_hash': top.tx_hash,
+                'payout_tx_hash': payout.payout_tx_hash if payout else '',
             })
     return json_response({'winners': winners})
 
@@ -1562,6 +1572,210 @@ def governance_history(request):
             } if result else None,
         })
     return json_response({'history': out})
+
+
+def _tally_for_special_proposal(proposal_id):
+    rows = (
+        SpecialVote.objects
+        .filter(proposal_id=proposal_id)
+        .values('choice')
+        .annotate(points=Sum('points'))
+    )
+    tally = {'yes': 0, 'no': 0}
+    for row in rows:
+        if row['choice'] in tally:
+            tally[row['choice']] = int(row['points'] or 0)
+    return tally
+
+
+def special_proposals_list(request):
+    from datetime import date
+    address = (request.GET.get('address') or '').strip()
+    today = date.today()
+    proposals = SpecialProposal.objects.filter(is_active=True, end_date__gte=today)
+    out = []
+    for p in proposals:
+        tally = _tally_for_special_proposal(p.id)
+        me = None
+        if address.startswith('inj1'):
+            month = _current_month()
+            _ensure_snapshot(month)
+            snap = GovernanceVoterSnapshot.objects.filter(month=month, address=address).first()
+            sv = SpecialVote.objects.filter(proposal=p, address=address).first()
+            me = {
+                'address': address,
+                'eligible': snap is not None,
+                'nft_count': snap.nft_count if snap else 0,
+                'has_voted': sv is not None,
+                'choice': sv.choice if sv else None,
+                'tx_hash': sv.tx_hash if sv else None,
+            }
+        out.append({
+            'id': p.id,
+            'title': p.title,
+            'description': p.description,
+            'choice_yes_label': p.choice_yes_label,
+            'choice_no_label': p.choice_no_label,
+            'start_date': p.start_date.isoformat(),
+            'end_date': p.end_date.isoformat(),
+            'tally': tally,
+            'total_points': tally['yes'] + tally['no'],
+            'me': me,
+        })
+    return json_response({'proposals': out})
+
+
+@csrf_exempt
+def special_proposal_create(request):
+    if request.method != 'POST':
+        return json_response({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return json_response({'error': 'Invalid JSON'}, status=400)
+
+    admin_address = (body.get('admin_address') or '').strip().lower()
+    if admin_address != PEDRO_ADMIN_ADDRESS:
+        return json_response({'error': 'Not authorized'}, status=403)
+
+    title = (body.get('title') or '').strip()
+    description = (body.get('description') or '').strip()
+    choice_yes_label = (body.get('choice_yes_label') or 'Yes').strip()[:64]
+    choice_no_label = (body.get('choice_no_label') or 'No').strip()[:64]
+    end_date_str = (body.get('end_date') or '').strip()
+
+    if not title or not description or not end_date_str:
+        return json_response({'error': 'title, description and end_date are required'}, status=400)
+
+    from datetime import date
+    try:
+        end_date = date.fromisoformat(end_date_str)
+    except ValueError:
+        return json_response({'error': 'end_date must be YYYY-MM-DD'}, status=400)
+
+    if end_date < date.today():
+        return json_response({'error': 'end_date must be in the future'}, status=400)
+
+    proposal = SpecialProposal.objects.create(
+        title=title[:200],
+        description=description,
+        choice_yes_label=choice_yes_label,
+        choice_no_label=choice_no_label,
+        is_active=True,
+        start_date=date.today(),
+        end_date=end_date,
+    )
+    return json_response({'ok': True, 'id': proposal.id, 'title': proposal.title})
+
+
+@csrf_exempt
+def special_proposal_vote(request):
+    if request.method != 'POST':
+        return json_response({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return json_response({'error': 'Invalid JSON'}, status=400)
+
+    address = (body.get('address') or '').strip()
+    proposal_id = body.get('proposal_id')
+    choice = (body.get('choice') or '').strip()
+    tx_hash = (body.get('tx_hash') or '').strip()
+
+    if not address.startswith('inj1') or not tx_hash:
+        return json_response({'error': 'Missing or invalid fields'}, status=400)
+    if choice not in ('yes', 'no'):
+        return json_response({'error': "Choice must be 'yes' or 'no'"}, status=400)
+
+    try:
+        proposal = SpecialProposal.objects.get(id=proposal_id, is_active=True)
+    except (SpecialProposal.DoesNotExist, TypeError, ValueError):
+        return json_response({'error': 'Proposal not found or inactive'}, status=404)
+
+    from datetime import date
+    if proposal.end_date < date.today():
+        return json_response({'error': 'Voting has closed for this proposal'}, status=409)
+
+    month = _current_month()
+    _ensure_snapshot(month)
+    try:
+        snapshot = GovernanceVoterSnapshot.objects.get(month=month, address=address)
+    except GovernanceVoterSnapshot.DoesNotExist:
+        if not GovernanceVoterSnapshot.objects.filter(month=month).exists():
+            return json_response({'error': 'Voter snapshot not yet taken'}, status=409)
+        return json_response(
+            {'error': 'You did not hold any Pedro NFTs at the start of this month'},
+            status=403,
+        )
+
+    if SpecialVote.objects.filter(proposal=proposal, address=address).exists():
+        return json_response({'error': 'You have already voted on this proposal'}, status=409)
+
+    ok, reason = GovernanceVerifier.verify_special_vote(tx_hash, address, proposal.id, choice)
+    if not ok:
+        return json_response({'error': f'Vote verification failed: {reason}'}, status=400)
+
+    try:
+        vote = SpecialVote.objects.create(
+            proposal=proposal,
+            address=address,
+            choice=choice,
+            points=snapshot.nft_count,
+            tx_hash=tx_hash,
+        )
+    except IntegrityError:
+        return json_response({'error': 'Tx hash already used or duplicate vote'}, status=409)
+
+    return json_response({'ok': True, 'id': vote.id, 'proposal_id': proposal.id, 'choice': choice, 'points': vote.points})
+
+
+def special_proposals_history(request):
+    from datetime import date
+    past = SpecialProposal.objects.filter(end_date__lt=date.today()).order_by('-end_date')
+    out = []
+    for p in past:
+        tally = _tally_for_special_proposal(p.id)
+        total = tally['yes'] + tally['no']
+        winner = None
+        if total > 0:
+            winner = 'yes' if tally['yes'] >= tally['no'] else 'no'
+            winner = p.choice_yes_label if winner == 'yes' else p.choice_no_label
+        out.append({
+            'id': p.id,
+            'title': p.title,
+            'description': p.description,
+            'choice_yes_label': p.choice_yes_label,
+            'choice_no_label': p.choice_no_label,
+            'end_date': p.end_date.isoformat(),
+            'tally': tally,
+            'winner': winner,
+        })
+    return json_response({'history': out})
+
+
+@csrf_exempt
+def game_admin_set_payout(request):
+    if request.method != 'POST':
+        return json_response({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return json_response({'error': 'Invalid JSON'}, status=400)
+
+    admin_address = (body.get('admin_address') or '').strip().lower()
+    if admin_address != PEDRO_ADMIN_ADDRESS:
+        return json_response({'error': 'Not authorized'}, status=403)
+
+    month = (body.get('month') or '').strip()
+    tx_hash = (body.get('tx_hash') or '').strip()
+    if not month:
+        return json_response({'error': 'Missing month'}, status=400)
+
+    payout, _ = GameMonthPayout.objects.get_or_create(month=month)
+    payout.payout_tx_hash = tx_hash[:128]
+    payout.save(update_fields=['payout_tx_hash', 'updated_at'])
+
+    return json_response({'ok': True, 'month': month, 'payout_tx_hash': payout.payout_tx_hash})
 
 
 @csrf_exempt

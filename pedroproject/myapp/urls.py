@@ -55,6 +55,13 @@ urlpatterns = [
     path('governance/current/', views.governance_current, name='governance_current'),
     path('governance/history/', views.governance_history, name='governance_history'),
 
+    path('governance/proposals/', views.special_proposals_list, name='special_proposals_list'),
+    path('governance/proposals/create/', views.special_proposal_create, name='special_proposal_create'),
+    path('governance/proposals/vote/', views.special_proposal_vote, name='special_proposal_vote'),
+    path('governance/proposals/history/', views.special_proposals_history, name='special_proposals_history'),
+
+    path('game/admin/set_payout/', views.game_admin_set_payout, name='game_admin_set_payout'),
+
     path('dashboard/tx/', views.dashboard_tx_log, name='dashboard_tx_log'),
     path('dashboard/tx/<str:feature>/', views.dashboard_tx_recent, name='dashboard_tx_recent'),
 ]
