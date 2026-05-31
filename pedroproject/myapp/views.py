@@ -997,6 +997,9 @@ def game_hall_of_fame(request):
             'score': p.winning_score,
             'tx_hash': p.winning_tx_hash,
             'payout_tx_hash': p.payout_tx_hash,
+            'payout_nft_tx_hash': p.payout_nft_tx_hash,
+            # The frontend uses this single flag to flip "pending" → "paid".
+            'fully_paid': bool(p.payout_tx_hash and p.payout_nft_tx_hash),
         }
         for p in payouts
     ]
@@ -1857,15 +1860,38 @@ def game_admin_set_payout(request):
         return json_response({'error': 'Not authorized'}, status=403)
 
     month = (body.get('month') or '').strip()
-    tx_hash = (body.get('tx_hash') or '').strip()
     if not month:
         return json_response({'error': 'Missing month'}, status=400)
 
-    payout, _ = GameMonthPayout.objects.get_or_create(month=month)
-    payout.payout_tx_hash = tx_hash[:128]
-    payout.save(update_fields=['payout_tx_hash', 'updated_at'])
+    # The prize is paid in two on-chain transactions: one for 5 INJ and one
+    # for the 1 PEDRO NFT transfer. Both must be recorded before the Hall of
+    # Fame considers the month fully paid out. Either field may be sent on
+    # its own (e.g. admin pastes the INJ tx first, then the NFT tx later).
+    # `tx_hash` is accepted as a legacy alias for the INJ tx.
+    inj_tx = (
+        body.get('payout_tx_hash')
+        if body.get('payout_tx_hash') is not None
+        else body.get('tx_hash')
+    )
+    nft_tx = body.get('payout_nft_tx_hash')
 
-    return json_response({'ok': True, 'month': month, 'payout_tx_hash': payout.payout_tx_hash})
+    payout, _ = GameMonthPayout.objects.get_or_create(month=month)
+    update_fields = ['updated_at']
+    if inj_tx is not None:
+        payout.payout_tx_hash = (inj_tx or '').strip()[:128]
+        update_fields.append('payout_tx_hash')
+    if nft_tx is not None:
+        payout.payout_nft_tx_hash = (nft_tx or '').strip()[:128]
+        update_fields.append('payout_nft_tx_hash')
+    payout.save(update_fields=update_fields)
+
+    return json_response({
+        'ok': True,
+        'month': month,
+        'payout_tx_hash': payout.payout_tx_hash,
+        'payout_nft_tx_hash': payout.payout_nft_tx_hash,
+        'fully_paid': bool(payout.payout_tx_hash and payout.payout_nft_tx_hash),
+    })
 
 
 @csrf_exempt

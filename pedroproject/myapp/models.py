@@ -246,14 +246,21 @@ class GameMonthPayout(models.Model):
     winning_name = models.CharField(max_length=64, blank=True)
     winning_score = models.BigIntegerField(default=0)
     winning_tx_hash = models.CharField(max_length=128, blank=True)
+    # The prize is paid in two transactions: 5 INJ and 1 PEDRO NFT. Both
+    # hashes must be filled before the Hall of Fame considers the month
+    # "paid out". `payout_tx_hash` (kept for back-compat) holds the INJ tx.
     payout_tx_hash = models.CharField(max_length=128, blank=True)
+    payout_nft_tx_hash = models.CharField(max_length=128, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-month']
 
+    def is_fully_paid(self) -> bool:
+        return bool(self.payout_tx_hash and self.payout_nft_tx_hash)
+
     def __str__(self):
-        return f"{self.month} payout={'paid' if self.payout_tx_hash else 'pending'}"
+        return f"{self.month} payout={'paid' if self.is_fully_paid() else 'pending'}"
 
 
 class TokenHolder(models.Model):
