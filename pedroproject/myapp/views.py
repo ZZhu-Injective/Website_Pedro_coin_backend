@@ -1202,6 +1202,11 @@ RAFFLE_PRIZE_LABEL = '1 INJ'
 RAFFLE_COST_HOLDER_PEDRO = 5  # PEDRO per ticket if you hold ≥1 NFT
 RAFFLE_COST_NON_HOLDER_PEDRO = 10  # PEDRO per ticket if you don't
 
+# Lazy winner-picking runs on every raffle read. We use `secrets.choice` (CSPRNG)
+# so the team can't be accused of cherry-picking even though picking is
+# automatic. Same entropy source as the legacy `pick_raffle_winner` cron.
+import secrets as _raffle_secrets
+
 
 def _current_week() -> str:
     """ISO week string for the current UTC moment, e.g. '2026-W18'.
@@ -1209,6 +1214,52 @@ def _current_week() -> str:
     now = datetime.now(timezone.utc)
     iso_year, iso_week, _ = now.isocalendar()
     return f"{iso_year}-W{iso_week:02d}"
+
+
+def _ensure_raffle_weeks_finalized(current_week: str) -> None:
+    """Lazy weekly draw: for every past ISO week that has tickets but no
+    `RaffleResult` row yet, pick a winning ticket and persist it.
+
+    Idempotent — a second call is a no-op because the RaffleResult row now
+    exists. Mirrors `_ensure_month_rolled_over` for the game.
+    """
+    past_weeks_with_tickets = list(
+        RaffleTicket.objects
+        .exclude(week=current_week)
+        .values_list('week', flat=True)
+        .distinct()
+    )
+    if not past_weeks_with_tickets:
+        return
+    already_drawn = set(
+        RaffleResult.objects
+        .filter(week__in=past_weeks_with_tickets)
+        .values_list('week', flat=True)
+    )
+    for week in past_weeks_with_tickets:
+        if week in already_drawn:
+            continue
+        ticket_ids = list(
+            RaffleTicket.objects
+            .filter(week=week)
+            .values_list('id', 'address')
+        )
+        if not ticket_ids:
+            continue
+        winning_id, winning_address = _raffle_secrets.choice(ticket_ids)
+        winning_name = _locked_name_for(winning_address)
+        try:
+            RaffleResult.objects.create(
+                week=week,
+                winning_address=winning_address,
+                winning_ticket_id=winning_id,
+                winning_name=winning_name,
+                ticket_count=len(ticket_ids),
+            )
+        except IntegrityError:
+            # Race with another concurrent request that just drew this week.
+            # Whichever transaction got there first wins; we silently move on.
+            continue
 
 
 def _week_bounds_utc(week: str) -> tuple[datetime, datetime]:
@@ -1256,6 +1307,9 @@ def raffle_current(request, address):
         return json_response({'error': 'Invalid address'}, status=400)
 
     week = _current_week()
+    # Whoever loads the page first after a Monday rollover triggers the draw
+    # for last week. No more manual `pick_raffle_winner` cron needed.
+    _ensure_raffle_weeks_finalized(week)
     nft_count = _fetch_pedro_nft_count(address)
     total_tickets = RaffleTicket.objects.filter(week=week).count()
     my_tickets = _serialize_my_tickets(address, week)
@@ -1436,6 +1490,7 @@ def raffle_buy(request):
 
 def raffle_history(request):
     """Past weekly winners + payout status."""
+    _ensure_raffle_weeks_finalized(_current_week())
     rows = RaffleResult.objects.all()[:24]
     return json_response({
         'results': [
@@ -1476,13 +1531,12 @@ def raffle_admin_set_payout(request):
     if not admin_address.startswith('inj1'):
         return json_response({'error': 'Missing admin_address'}, status=400)
 
-    if not RAFFLE_ADMIN_ADDRESSES:
-        return json_response(
-            {'error': 'No admin addresses configured on the server'},
-            status=503,
-        )
-
-    if admin_address.lower() not in RAFFLE_ADMIN_ADDRESSES:
+    # The main Pedro admin wallet is always authorized for raffle payouts,
+    # in addition to anything listed in the RAFFLE_ADMIN_ADDRESSES env var.
+    # This way the same wallet that signs game payouts can also sign raffle
+    # payouts without needing extra server config.
+    allowed = set(RAFFLE_ADMIN_ADDRESSES) | {PEDRO_ADMIN_ADDRESS}
+    if admin_address.lower() not in allowed:
         return json_response({'error': 'Not authorized'}, status=403)
 
     if not week:
