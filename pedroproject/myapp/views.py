@@ -1692,8 +1692,50 @@ def governance_current(request):
     return json_response(response)
 
 
+def _ensure_governance_month_finalized(current_month: str) -> None:
+    """Lazy month-end finalization: for every past month with votes but no
+    `GovernanceMonthResult` row yet, compute the winning choice from the
+    tallies and persist a result row. `payout_tx_hash` is left blank — admin
+    fills it in via the UI later. Mirrors `_ensure_month_rolled_over` (game)
+    and `_ensure_raffle_weeks_finalized` (raffle).
+    """
+    past_months = list(
+        GovernanceVote.objects
+        .exclude(month=current_month)
+        .values_list('month', flat=True)
+        .distinct()
+    )
+    if not past_months:
+        return
+    already_finalized = set(
+        GovernanceMonthResult.objects
+        .filter(month__in=past_months)
+        .values_list('month', flat=True)
+    )
+    for month in past_months:
+        if month in already_finalized:
+            continue
+        tally = _tally_for_month(month)
+        winner = (
+            max(tally, key=lambda c: tally[c]) if any(tally.values()) else ''
+        )
+        try:
+            GovernanceMonthResult.objects.create(
+                month=month,
+                winning_choice=winner,
+                points_liquidity=tally.get('liquidity', 0),
+                points_buy_nfts=tally.get('buy_nfts', 0),
+                points_giveaway=tally.get('giveaway', 0),
+            )
+        except IntegrityError:
+            # Race with another concurrent request that just finalized this
+            # month. Whichever transaction landed first wins; move on.
+            continue
+
+
 def governance_history(request):
     current = _current_month()
+    _ensure_governance_month_finalized(current)
     months = (
         GovernanceVote.objects
         .exclude(month=current)
@@ -1706,6 +1748,7 @@ def governance_history(request):
         tally = _tally_for_month(month)
         winner = max(tally, key=lambda c: tally[c]) if any(tally.values()) else None
         result = GovernanceMonthResult.objects.filter(month=month).first()
+        payout_tx = result.payout_tx_hash if result else ''
         out.append({
             'month': month,
             'winning_choice': (
@@ -1713,10 +1756,11 @@ def governance_history(request):
             ),
             'tally': tally,
             'payout': {
-                'tx_hash': result.payout_tx_hash if result else '',
+                'tx_hash': payout_tx,
                 'amount': result.payout_amount if result else '',
                 'notes': result.notes if result else '',
             } if result else None,
+            'fully_paid': bool(payout_tx),
         })
     return json_response({'history': out})
 
@@ -1898,6 +1942,50 @@ def special_proposals_history(request):
             'winner': winner,
         })
     return json_response({'history': out})
+
+
+@csrf_exempt
+def governance_admin_set_payout(request):
+    """Admin-only: record the on-chain payout that executed the winning
+    governance choice for a past month. Single tx hash, plus optional
+    `payout_amount` (e.g. "5 INJ") and freeform `notes`. Same admin gating
+    as game/raffle: only `PEDRO_ADMIN_ADDRESS` is authorized."""
+    if request.method != 'POST':
+        return json_response({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return json_response({'error': 'Invalid JSON'}, status=400)
+
+    admin_address = (body.get('admin_address') or '').strip().lower()
+    if admin_address != PEDRO_ADMIN_ADDRESS:
+        return json_response({'error': 'Not authorized'}, status=403)
+
+    month = (body.get('month') or '').strip()
+    if not month:
+        return json_response({'error': 'Missing month'}, status=400)
+
+    result, _ = GovernanceMonthResult.objects.get_or_create(month=month)
+    update_fields = ['finalized_at']
+    if body.get('payout_tx_hash') is not None:
+        result.payout_tx_hash = (body.get('payout_tx_hash') or '').strip()[:128]
+        update_fields.append('payout_tx_hash')
+    if body.get('payout_amount') is not None:
+        result.payout_amount = (body.get('payout_amount') or '').strip()[:64]
+        update_fields.append('payout_amount')
+    if body.get('notes') is not None:
+        result.notes = (body.get('notes') or '').strip()
+        update_fields.append('notes')
+    result.save(update_fields=update_fields)
+
+    return json_response({
+        'ok': True,
+        'month': result.month,
+        'payout_tx_hash': result.payout_tx_hash,
+        'payout_amount': result.payout_amount,
+        'notes': result.notes,
+        'fully_paid': bool(result.payout_tx_hash),
+    })
 
 
 @csrf_exempt
