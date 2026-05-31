@@ -1816,10 +1816,10 @@ def special_proposals_list(request):
     return json_response({'proposals': out})
 
 
-@csrf_exempt
 SPECIAL_PROPOSAL_BURN_PEDRO = 10_000
 
 
+@csrf_exempt
 def special_proposal_create(request):
     """Create a new special yes/no proposal.
 
