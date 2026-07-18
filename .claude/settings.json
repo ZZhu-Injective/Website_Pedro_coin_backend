@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(pip install keyboard)",
+      "PowerShell(python -m pip install keyboard)",
+      "PowerShell(py -m pip install keyboard)",
+      "PowerShell(py -m pip install pydirectinput)",
+      "PowerShell(winget install --id Ollama.Ollama -e --accept-source-agreements --accept-package-agreements)",
+      "PowerShell($out = \"$env:USERPROFILE\\\\Downloads\\\\OllamaSetup.exe\"; Write-Output \"Downloading to $out ...\"; Invoke-WebRequest -Uri \"https://ollama.com/download/OllamaSetup.exe\" -OutFile $out; Write-Output \"Downloaded. Size \\(MB\\):\"; [math]::Round\\(\\(Get-Item $out\\).Length/1MB,1\\))",
+      "PowerShell($exe = \"$env:USERPROFILE\\\\Downloads\\\\OllamaSetup.exe\"; Write-Output \"Installing Ollama silently...\"; Start-Process -FilePath $exe -ArgumentList \"/VERYSILENT\",\"/SUPPRESSMSGBOXES\",\"/NORESTART\" -Wait; Write-Output \"Installer finished.\")",
+      "PowerShell(Get-CimInstance -Namespace \"root/cimv2\" -ClassName Win32_PerfFormattedData_Counters_ThermalZoneInformation -ErrorAction SilentlyContinue)",
+      "PowerShell($code = Get-Content \"C:\\\\Users\\\\zonwi\\\\Desktop\\\\laptop-monitor.ps1\" -Raw; $code = $code -replace 'while \\\\\\(\\\\$true\\\\\\) \\\\{', 'for \\($i=0; $i -lt 1; $i++\\) {' -replace 'Start-Sleep -Seconds 2', 'Start-Sleep -Milliseconds 1'; Invoke-Expression $code)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\zonwi\\Desktop"
+    ]
+  }
+}

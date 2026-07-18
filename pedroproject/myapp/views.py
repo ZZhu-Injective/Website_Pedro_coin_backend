@@ -41,7 +41,8 @@ from .injective_talent_check import TalentNotifier
 
 from datetime import datetime, timezone, timedelta
 from django.db import IntegrityError
-from django.db.models import Sum
+from django.db.models import Sum, F
+from django.db.models.functions import Greatest
 from .models import (
     GameLeaderboardEntry,
     GameUpgradeState,
@@ -62,7 +63,11 @@ from .injective_game import GameVerifier, INJECTIVE_LCD
 from .injective_governance import GovernanceVerifier, VALID_CHOICES
 from .injective_dashboard_logs import DashboardLogVerifier, FEATURE_MEMOS
 
-GAME_MAX_SCORE = 100_000_000
+# Effectively unlimited score. The only ceiling is the DB column type:
+# `score` is a BigIntegerField, so the hard limit is the signed 64-bit max
+# (9,223,372,036,854,775,807). We validate against it purely to stop an
+# out-of-range value from crashing the database — players will never reach it.
+GAME_MAX_SCORE = 9_223_372_036_854_775_807
 GAME_MAX_LEVEL = 1000
 
 # Raffle admins — comma-separated inj1 addresses in the RAFFLE_ADMIN_ADDRESSES
@@ -89,11 +94,17 @@ STEAL_MAX_LEVEL = 12
 
 # Shared across all workers via the database cache (see settings.CACHES).
 # Value is a dict[str, int] mapping inj1 address -> Pedro NFT count.
-_NFT_HOLDERS_CACHE_KEY = 'pedro_nft_holders_v1'
-_NFT_HOLDERS_TTL_SECONDS = 600  # 10 minutes — NFTs don't move every second.
-# Within a single worker, serialize the refresh so we don't do the multi-page
-# state scan twice in parallel when the cache is cold. Cross-worker races are
-# fine — at worst two workers refresh concurrently and the last write wins.
+_NFT_HOLDERS_CACHE_KEY = 'pedro_nft_holders_v2'  # v2: value is {counts, fetched_at}
+# Within this window the cached map is "fresh" and served as-is. Past it we
+# still serve the (stale) map instantly but kick off a background refresh —
+# stale-while-revalidate, so a user request never waits on the state scan.
+_NFT_HOLDERS_FRESH_SECONDS = 600  # 10 minutes — NFTs don't move every second.
+# How long the cache keeps the map around even when stale, so reads stay
+# instant once it's been warmed once. The scheduled `refresh_nft_holders`
+# command should run well inside this window to keep it fresh.
+_NFT_HOLDERS_RETENTION_SECONDS = 86_400  # 24h
+# Serializes refreshes so we never run the multi-page state scan twice at
+# once (cold sync path and background revalidate share this lock).
 _NFT_HOLDERS_LOCK = threading.Lock()
 
 
@@ -177,8 +188,14 @@ def _refresh_nft_holders() -> dict[str, int]:
             break
 
     # Write to the shared (database-backed) cache so all gunicorn workers see
-    # the same value for the next _NFT_HOLDERS_TTL_SECONDS.
-    cache.set(_NFT_HOLDERS_CACHE_KEY, counts, _NFT_HOLDERS_TTL_SECONDS)
+    # the same value. Stored with a fetch timestamp so readers can tell a
+    # fresh map from a stale one, and retained well past the freshness window
+    # so reads keep hitting cache between refreshes.
+    cache.set(
+        _NFT_HOLDERS_CACHE_KEY,
+        {'counts': counts, 'fetched_at': time.time()},
+        _NFT_HOLDERS_RETENTION_SECONDS,
+    )
     logger.info(
         "NFT holders refreshed: %s holders, %s tokens, %s pages",
         len(counts), sum(counts.values()), pages,
@@ -186,18 +203,63 @@ def _refresh_nft_holders() -> dict[str, int]:
     return counts
 
 
+def _refresh_nft_holders_locked() -> dict[str, int]:
+    """Run the refresh under the shared lock with a double-check, so a burst
+    of cold-cache requests triggers only one state scan. Returns the map."""
+    with _NFT_HOLDERS_LOCK:
+        entry = cache.get(_NFT_HOLDERS_CACHE_KEY)
+        # Another thread may have refreshed while we waited for the lock.
+        if (
+            isinstance(entry, dict)
+            and 'counts' in entry
+            and time.time() - entry.get('fetched_at', 0) <= _NFT_HOLDERS_FRESH_SECONDS
+        ):
+            return entry['counts']
+        return _refresh_nft_holders()
+
+
+def _trigger_async_holder_refresh() -> None:
+    """Kick off a background refresh if one isn't already running. Never
+    blocks the caller — this is the 'revalidate' half of stale-while-
+    revalidate. If the lock is already held, a refresh is in flight, so we
+    skip."""
+    if not _NFT_HOLDERS_LOCK.acquire(blocking=False):
+        return
+
+    def _run():
+        try:
+            _refresh_nft_holders()
+        except Exception as e:  # never let a background failure escape
+            logger.warning("Background NFT holder refresh failed: %s", e)
+        finally:
+            _NFT_HOLDERS_LOCK.release()
+
+    try:
+        threading.Thread(
+            target=_run, daemon=True, name='nft-holders-refresh',
+        ).start()
+    except Exception:
+        _NFT_HOLDERS_LOCK.release()
+        raise
+
+
 def _fetch_pedro_nft_count(address: str) -> int:
     """Returns the number of Pedro NFTs the given address holds. Backed by
-    Django's database cache so the value is shared across all workers."""
-    counts = cache.get(_NFT_HOLDERS_CACHE_KEY)
-    if counts is None:
-        with _NFT_HOLDERS_LOCK:
-            # Re-check after acquiring the lock — another thread in this
-            # worker may have populated the cache while we were waiting.
-            counts = cache.get(_NFT_HOLDERS_CACHE_KEY)
-            if counts is None:
-                counts = _refresh_nft_holders()
-    return counts.get(address, 0)
+    Django's database cache so the value is shared across all workers.
+
+    Stale-while-revalidate: a warmed cache always answers instantly. When the
+    cached map is older than the freshness window we still return it right
+    away and refresh in the background, so a user request only ever blocks on
+    the (expensive, multi-page) state scan when the cache is completely cold —
+    which the scheduled `refresh_nft_holders` command keeps from happening."""
+    entry = cache.get(_NFT_HOLDERS_CACHE_KEY)
+    if isinstance(entry, dict) and 'counts' in entry:
+        if time.time() - entry.get('fetched_at', 0) > _NFT_HOLDERS_FRESH_SECONDS:
+            _trigger_async_holder_refresh()
+        return entry['counts'].get(address, 0)
+    # Cold cache (first call after deploy / cache eviction) — block once to
+    # fill it. Every subsequent read is served from cache.
+    return _refresh_nft_holders_locked().get(address, 0)
 
 
 def _locked_name_for(address: str) -> str:
@@ -228,10 +290,17 @@ def _current_month():
 
 
 def _ensure_month_rolled_over(current_month: str) -> None:
-    """Lazy month-end housekeeping: snapshot every past-month winner into
-    GameMonthPayout (the Hall of Fame record), then delete the now-stale
-    leaderboard rows for that month. Idempotent — running it twice does
-    nothing the second time."""
+    """Month-end housekeeping. For every past month still sitting in the live
+    tables: snapshot its winner (highest score) into GameMonthPayout — the
+    permanent Hall-of-Fame record — then wipe ALL three live game tables so
+    the new month starts from a completely empty board:
+
+        GameLeaderboardEntry · GameUpgradeState · GameStealLog
+
+    Idempotent: once the live tables hold only the current month this is a
+    no-op. It runs lazily on the first request of the new month, and can also
+    be fired exactly at 00:00 UTC by the `rollover_game` management command
+    (cron / Windows Task Scheduler)."""
     past_months = list(
         GameLeaderboardEntry.objects
         .exclude(month=current_month)
@@ -251,7 +320,8 @@ def _ensure_month_rolled_over(current_month: str) -> None:
             payout, _ = GameMonthPayout.objects.get_or_create(month=month)
             # Only fill the winner snapshot the first time — subsequent calls
             # must not clobber it, and an admin-set payout_tx_hash must
-            # survive untouched.
+            # survive untouched. Read the canonical name BEFORE the wipe
+            # below deletes the GameUpgradeState row it lives on.
             if not payout.winning_address:
                 canonical = _locked_name_for(top.address) or top.name
                 payout.winning_address = top.address
@@ -262,7 +332,16 @@ def _ensure_month_rolled_over(current_month: str) -> None:
                     'winning_address', 'winning_name',
                     'winning_score', 'winning_tx_hash', 'updated_at',
                 ])
-        GameLeaderboardEntry.objects.filter(month=month).delete()
+    # The winner(s) are now safely recorded in GameMonthPayout, so wipe every
+    # live game table back to empty for the fresh month.
+    GameLeaderboardEntry.objects.exclude(month=current_month).delete()
+    GameUpgradeState.objects.exclude(current_month=current_month).delete()
+    # GameStealLog has no month column — clear everything logged before the
+    # current month began (any steal already logged in the new month stays).
+    month_start = datetime.now(timezone.utc).replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0,
+    )
+    GameStealLog.objects.filter(created_at__lt=month_start).delete()
 
 
 def _reset_upgrade_state_if_needed(state, current_month: str) -> bool:
@@ -1177,6 +1256,21 @@ def game_steal(request):
     target.save(update_fields=['score', 'updated_at'])
     attacker.save(update_fields=['score', 'last_steal_at', 'updated_at'])
 
+    # Reflect the steal on the public leaderboard immediately so a steal moves
+    # both players' standings without anyone re-submitting (and re-burning).
+    # We shift each existing current-month entry by exactly the stolen amount
+    # — NOT by copying the live score, which also holds un-burned clicking
+    # gains. We only UPDATE existing rows (never create): getting onto the
+    # board still requires a paid 1 PEDRO burn, which supplies the unique
+    # tx_hash an entry needs. `.update()` on an empty match is a harmless no-op,
+    # so a player who never submitted simply isn't affected here.
+    GameLeaderboardEntry.objects.filter(
+        address=attacker_addr, month=current_month,
+    ).update(score=F('score') + actual)
+    GameLeaderboardEntry.objects.filter(
+        address=target_addr, month=current_month,
+    ).update(score=Greatest(F('score') - actual, 0))
+
     GameStealLog.objects.create(
         attacker=attacker_addr,
         target=target_addr,
@@ -1765,17 +1859,43 @@ def governance_history(request):
     return json_response({'history': out})
 
 
-def _tally_for_special_proposal(proposal_id):
+def _options_for(proposal):
+    """Ordered option labels, with a legacy yes/no fallback for old proposals."""
+    opts = proposal.options if isinstance(proposal.options, list) else []
+    opts = [str(o).strip() for o in opts if str(o).strip()]
+    if opts:
+        return opts
+    return [proposal.choice_yes_label or 'Yes', proposal.choice_no_label or 'No']
+
+
+def _choice_to_index(choice):
+    """Map a stored vote choice to an option index. Handles both the new index
+    strings ("0", "1", ...) and legacy 'yes'/'no'."""
+    if choice is None:
+        return None
+    c = str(choice)
+    if c.isdigit():
+        return int(c)
+    if c == 'yes':
+        return 0
+    if c == 'no':
+        return 1
+    return None
+
+
+def _tally_for_special_proposal(proposal_id, num_options):
+    """Points per option, as a list aligned to the proposal's options."""
     rows = (
         SpecialVote.objects
         .filter(proposal_id=proposal_id)
         .values('choice')
         .annotate(points=Sum('points'))
     )
-    tally = {'yes': 0, 'no': 0}
+    tally = [0] * max(num_options, 0)
     for row in rows:
-        if row['choice'] in tally:
-            tally[row['choice']] = int(row['points'] or 0)
+        idx = _choice_to_index(row['choice'])
+        if idx is not None and 0 <= idx < num_options:
+            tally[idx] += int(row['points'] or 0)
     return tally
 
 
@@ -1786,7 +1906,8 @@ def special_proposals_list(request):
     proposals = SpecialProposal.objects.filter(is_active=True, end_date__gte=today)
     out = []
     for p in proposals:
-        tally = _tally_for_special_proposal(p.id)
+        options = _options_for(p)
+        tally = _tally_for_special_proposal(p.id, len(options))
         me = None
         if address.startswith('inj1'):
             month = _current_month()
@@ -1798,19 +1919,21 @@ def special_proposals_list(request):
                 'eligible': snap is not None,
                 'nft_count': snap.nft_count if snap else 0,
                 'has_voted': sv is not None,
-                'choice': sv.choice if sv else None,
+                'choice': _choice_to_index(sv.choice) if sv else None,
                 'tx_hash': sv.tx_hash if sv else None,
             }
         out.append({
             'id': p.id,
             'title': p.title,
             'description': p.description,
+            'options': options,
+            # Kept for backward-compatible clients; new UI uses `options`.
             'choice_yes_label': p.choice_yes_label,
             'choice_no_label': p.choice_no_label,
             'start_date': p.start_date.isoformat(),
             'end_date': p.end_date.isoformat(),
             'tally': tally,
-            'total_points': tally['yes'] + tally['no'],
+            'total_points': sum(tally),
             'me': me,
         })
     return json_response({'proposals': out})
@@ -1887,9 +2010,24 @@ def special_proposal_create(request):
 
     title = (body.get('title') or '').strip()
     description = (body.get('description') or '').strip()
-    choice_yes_label = (body.get('choice_yes_label') or 'Yes').strip()[:64]
-    choice_no_label = (body.get('choice_no_label') or 'No').strip()[:64]
     end_date_str = (body.get('end_date') or '').strip()
+
+    # New multi-option flow: `options` is a list of labels. Fall back to the
+    # legacy yes/no labels if an old client doesn't send `options`.
+    raw_options = body.get('options')
+    if isinstance(raw_options, list):
+        options = [str(o).strip()[:64] for o in raw_options if str(o).strip()]
+    else:
+        options = []
+    if not options:
+        yes_label = (body.get('choice_yes_label') or 'Yes').strip()[:64]
+        no_label = (body.get('choice_no_label') or 'No').strip()[:64]
+        options = [yes_label, no_label]
+
+    if len(options) < 2:
+        return json_response({'error': 'Provide at least 2 options'}, status=400)
+    if len(options) > 8:
+        return json_response({'error': 'A proposal can have at most 8 options'}, status=400)
 
     if not title or not description or not end_date_str:
         return json_response({'error': 'title, description and end_date are required'}, status=400)
@@ -1906,8 +2044,11 @@ def special_proposal_create(request):
     proposal = SpecialProposal.objects.create(
         title=title[:200],
         description=description,
-        choice_yes_label=choice_yes_label,
-        choice_no_label=choice_no_label,
+        options=options,
+        # Keep the two label columns populated (from the first two options) so
+        # any legacy reader still works.
+        choice_yes_label=options[0],
+        choice_no_label=options[1],
         is_active=True,
         start_date=date.today(),
         end_date=end_date,
@@ -1934,18 +2075,22 @@ def special_proposal_vote(request):
 
     address = (body.get('address') or '').strip()
     proposal_id = body.get('proposal_id')
-    choice = (body.get('choice') or '').strip()
+    choice = ('' if body.get('choice') is None else str(body.get('choice'))).strip()
     tx_hash = (body.get('tx_hash') or '').strip()
 
     if not address.startswith('inj1') or not tx_hash:
         return json_response({'error': 'Missing or invalid fields'}, status=400)
-    if choice not in ('yes', 'no'):
-        return json_response({'error': "Choice must be 'yes' or 'no'"}, status=400)
 
     try:
         proposal = SpecialProposal.objects.get(id=proposal_id, is_active=True)
     except (SpecialProposal.DoesNotExist, TypeError, ValueError):
         return json_response({'error': 'Proposal not found or inactive'}, status=404)
+
+    # `choice` is the option index ("0", "1", ...); legacy 'yes'/'no' still map.
+    options = _options_for(proposal)
+    choice_index = _choice_to_index(choice)
+    if choice_index is None or not (0 <= choice_index < len(options)):
+        return json_response({'error': 'Invalid option'}, status=400)
 
     from datetime import date
     if proposal.end_date < date.today():
@@ -1966,6 +2111,8 @@ def special_proposal_vote(request):
     if SpecialVote.objects.filter(proposal=proposal, address=address).exists():
         return json_response({'error': 'You have already voted on this proposal'}, status=409)
 
+    # Verify the on-chain memo using exactly the choice string the client
+    # signed (`pedro-special:{id}:{choice}`), then store the canonical index.
     ok, reason = GovernanceVerifier.verify_special_vote(tx_hash, address, proposal.id, choice)
     if not ok:
         return json_response({'error': f'Vote verification failed: {reason}'}, status=400)
@@ -1974,14 +2121,14 @@ def special_proposal_vote(request):
         vote = SpecialVote.objects.create(
             proposal=proposal,
             address=address,
-            choice=choice,
+            choice=str(choice_index),
             points=snapshot.nft_count,
             tx_hash=tx_hash,
         )
     except IntegrityError:
         return json_response({'error': 'Tx hash already used or duplicate vote'}, status=409)
 
-    return json_response({'ok': True, 'id': vote.id, 'proposal_id': proposal.id, 'choice': choice, 'points': vote.points})
+    return json_response({'ok': True, 'id': vote.id, 'proposal_id': proposal.id, 'choice': choice_index, 'points': vote.points})
 
 
 def special_proposals_history(request):
@@ -1989,18 +2136,18 @@ def special_proposals_history(request):
     past = SpecialProposal.objects.filter(end_date__lt=date.today()).order_by('-end_date')
     out = []
     for p in past:
-        tally = _tally_for_special_proposal(p.id)
-        total = tally['yes'] + tally['no']
+        options = _options_for(p)
+        tally = _tally_for_special_proposal(p.id, len(options))
+        total = sum(tally)
         winner = None
         if total > 0:
-            winner = 'yes' if tally['yes'] >= tally['no'] else 'no'
-            winner = p.choice_yes_label if winner == 'yes' else p.choice_no_label
+            win_idx = max(range(len(tally)), key=lambda i: tally[i])
+            winner = options[win_idx]
         out.append({
             'id': p.id,
             'title': p.title,
             'description': p.description,
-            'choice_yes_label': p.choice_yes_label,
-            'choice_no_label': p.choice_no_label,
+            'options': options,
             'end_date': p.end_date.isoformat(),
             'tally': tally,
             'winner': winner,

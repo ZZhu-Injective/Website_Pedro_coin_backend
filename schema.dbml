@@ -1,0 +1,473 @@
+// =====================================================================
+// PEDRO Coin Backend — Database Schema (DBML)
+// Django app "myapp" · 20 tables · migrations 0001–0015
+// Paste into https://dbdiagram.io  (or use dbml CLI)
+//
+// NOTE ON RELATIONSHIPS:
+//   Only ONE real foreign key exists in the whole schema:
+//       SpecialVote.proposal_id -> SpecialProposal.id  (CASCADE)
+//   Every other table is correlated in application code by shared
+//   string columns, NOT by DB-level FKs:
+//       address  (wallet)      week  (YYYY-Www)      month  (YYYY-MM)
+//   Those "soft joins" are declared at the bottom as dashed Refs so
+//   they render on the diagram without implying a real constraint.
+// =====================================================================
+
+Enum raffle_source {
+  free [note: 'Free (NFT holder)']
+  paid [note: 'Paid']
+}
+
+Enum dashboard_feature {
+  converter
+  airdrop
+  launcher
+}
+
+// ---------------------------------------------------------------------
+// GAME / CLICKER
+// ---------------------------------------------------------------------
+
+Table GameLeaderboardEntry {
+  id           integer     [pk, increment]
+  address      varchar(64) [not null, note: 'wallet']
+  name         varchar(64) [not null]
+  score        bigint      [not null]
+  tx_hash      varchar(128) [unique, not null, note: 'replay guard']
+  month        varchar(7)  [not null, note: 'YYYY-MM']
+  submitted_at timestamp   [not null, note: 'auto_now_add']
+
+  indexes {
+    address
+    month
+    tx_hash
+  }
+  Note: 'One scored submission per tx, per month.'
+}
+
+Table GameUpgradeState {
+  id            integer     [pk, increment]
+  address       varchar(64) [unique, not null, note: 'wallet']
+  click_level   integer     [not null, default: 0]
+  auto_level    integer     [not null, default: 0]
+  steal_level   integer     [not null, default: 0]
+  score         bigint      [not null, default: 0]
+  last_steal_at timestamp   [null]
+  locked_name   varchar(64) [not null, default: '', note: 'stable identity across resets']
+  current_month varchar(7)  [not null, default: '', note: 'YYYY-MM the levels are valid for']
+  updated_at    timestamp   [not null, note: 'auto_now']
+
+  Note: 'Live per-wallet upgrade levels + score; reset on month roll-over.'
+}
+
+Table GameStealLog {
+  id             integer     [pk, increment]
+  attacker       varchar(64) [not null, note: 'wallet']
+  target         varchar(64) [not null, note: 'wallet']
+  amount         bigint      [not null]
+  attacker_level integer     [not null, default: 0]
+  created_at     timestamp   [not null, note: 'auto_now_add']
+
+  indexes {
+    attacker
+    target
+  }
+  Note: 'Audit trail of successful steals.'
+}
+
+Table GameMonthPayout {
+  id                 integer     [pk, increment]
+  month              varchar(7)  [unique, not null, note: 'YYYY-MM']
+  winning_address    varchar(64) [not null, default: '', note: 'wallet']
+  winning_name       varchar(64) [not null, default: '']
+  winning_score      bigint      [not null, default: 0]
+  winning_tx_hash    varchar(128) [not null, default: '']
+  payout_tx_hash     varchar(128) [not null, default: '', note: 'INJ tx']
+  payout_nft_tx_hash varchar(128) [not null, default: '', note: 'NFT tx']
+  updated_at         timestamp   [not null, note: 'auto_now']
+
+  Note: 'Hall-of-Fame winner snapshot per month (5 INJ + 1 NFT).'
+}
+
+// ---------------------------------------------------------------------
+// RAFFLE  (joined by `week`)
+// ---------------------------------------------------------------------
+
+Table RaffleTicket {
+  id         integer          [pk, increment]
+  week       varchar(10)      [not null, note: 'YYYY-Www']
+  address    varchar(64)      [not null, note: 'wallet']
+  source     raffle_source    [not null]
+  tx_hash    varchar(128)     [not null, default: '', note: 'indexed, NOT unique']
+  created_at timestamp        [not null, note: 'auto_now_add']
+
+  indexes {
+    (week, address)
+    week
+    address
+    tx_hash
+  }
+  Note: 'One row per entered ticket (free or paid).'
+}
+
+Table RaffleFreeClaim {
+  id                 integer      [pk, increment]
+  address            varchar(64)  [not null, note: 'wallet']
+  week               varchar(10)  [not null, note: 'YYYY-Www']
+  nft_count_at_claim integer      [not null]
+  tickets_granted    integer      [not null]
+  tx_hash            varchar(128) [unique, null, note: '1 PEDRO burn = proof of wallet control']
+  claimed_at         timestamp    [not null, note: 'auto_now_add']
+
+  indexes {
+    (address, week) [unique]
+    address
+    week
+  }
+  Note: 'NFT-holder free allowance, at most once per week.'
+}
+
+Table RafflePurchase {
+  id           integer      [pk, increment]
+  tx_hash      varchar(128) [unique, not null, note: 'replay guard']
+  address      varchar(64)  [not null, note: 'wallet']
+  week         varchar(10)  [not null, note: 'YYYY-Www']
+  tickets      integer      [not null]
+  pedro_burned integer      [not null]
+  created_at   timestamp    [not null, note: 'auto_now_add']
+
+  indexes {
+    tx_hash
+    address
+    week
+  }
+  Note: 'Replay-guard for paid ticket burns.'
+}
+
+Table RaffleResult {
+  id                integer      [pk, increment]
+  week              varchar(10)  [unique, not null, note: 'YYYY-Www']
+  winning_address   varchar(64)  [not null, note: 'wallet']
+  winning_ticket_id bigint       [not null]
+  winning_name      varchar(64)  [not null, default: '']
+  ticket_count      integer      [not null]
+  picked_at         timestamp    [not null, note: 'auto_now_add']
+  payout_tx_hash    varchar(128) [not null, default: '', note: 'filled after payout']
+
+  indexes {
+    week
+    winning_address
+  }
+  Note: 'One draw per completed week; winner claims 1 INJ.'
+}
+
+// ---------------------------------------------------------------------
+// GOVERNANCE  (the only real FK lives here)
+// ---------------------------------------------------------------------
+
+Table GovernanceVoterSnapshot {
+  id          integer     [pk, increment]
+  month       varchar(7)  [not null, note: 'YYYY-MM']
+  address     varchar(64) [not null, note: 'wallet']
+  nft_count   integer     [not null]
+  captured_at timestamp   [not null, note: 'auto_now_add']
+
+  indexes {
+    (month, address) [unique]
+    month
+    address
+  }
+  Note: 'Monthly NFT-weight capture.'
+}
+
+Table GovernanceVote {
+  id       integer      [pk, increment]
+  address  varchar(64)  [not null, note: 'wallet']
+  month    varchar(7)   [not null, note: 'YYYY-MM']
+  choice   varchar(32)  [not null]
+  points   integer      [not null, note: 'NFT weight']
+  tx_hash  varchar(128) [unique, not null, note: 'replay guard']
+  voted_at timestamp    [not null, note: 'auto_now_add']
+
+  indexes {
+    (address, month) [unique]
+    address
+    month
+    choice
+    tx_hash
+  }
+  Note: 'Monthly poll vote, once per wallet.'
+}
+
+Table GovernanceMonthResult {
+  id               integer      [pk, increment]
+  month            varchar(7)   [unique, not null, note: 'YYYY-MM']
+  winning_choice   varchar(32)  [not null, default: '']
+  points_liquidity integer      [not null, default: 0]
+  points_buy_nfts  integer      [not null, default: 0]
+  points_giveaway  integer      [not null, default: 0]
+  payout_tx_hash   varchar(128) [not null, default: '']
+  payout_amount    varchar(64)  [not null, default: '']
+  notes            text         [not null, default: '']
+  finalized_at     timestamp    [not null, note: 'auto_now']
+
+  Note: 'Tallied monthly governance outcome + payout.'
+}
+
+Table SpecialProposal {
+  id               integer      [pk, increment]
+  title            varchar(200) [not null]
+  description      text         [not null]
+  options          json         [not null, note: 'list of option labels; a vote choice is the index']
+  choice_yes_label varchar(64)  [not null, default: 'Yes', note: 'legacy yes/no fallback']
+  choice_no_label  varchar(64)  [not null, default: 'No',  note: 'legacy yes/no fallback']
+  is_active        boolean      [not null, default: true]
+  start_date       date         [not null]
+  end_date         date         [not null]
+  created_at       timestamp    [not null, note: 'auto_now_add']
+  creator_address  varchar(64)  [not null, default: '', note: 'wallet; 10k PEDRO burn to create']
+  creation_tx_hash varchar(128) [not null, default: '']
+
+  indexes {
+    is_active
+    creator_address
+    creation_tx_hash
+  }
+  Note: 'Community-created governance proposal. Parent of SpecialVote.'
+}
+
+Table SpecialVote {
+  id          integer      [pk, increment]
+  proposal_id integer      [not null, ref: > SpecialProposal.id, note: 'the ONLY real FK (CASCADE)']
+  address     varchar(64)  [not null, note: 'wallet']
+  choice      varchar(16)  [not null, note: 'option index as string; legacy yes/no']
+  points      integer      [not null, note: 'NFT weight']
+  tx_hash     varchar(128) [unique, not null, note: 'replay guard']
+  voted_at    timestamp    [not null, note: 'auto_now_add']
+
+  indexes {
+    (proposal_id, address) [unique]
+    address
+    tx_hash
+  }
+  Note: 'Vote on a SpecialProposal, once per wallet per proposal.'
+}
+
+// ---------------------------------------------------------------------
+// MARKETPLACE & TALENT
+// ---------------------------------------------------------------------
+
+Table MarketplaceListing {
+  id             integer      [pk, increment]
+  legacy_id      integer      [null]
+  wallet_address varchar(64)  [not null, note: 'wallet']
+  title          varchar(255) [not null]
+  description    text         [not null, default: '']
+  category       varchar(100) [not null, default: '']
+  price          varchar(64)  [not null, default: '']
+  skills         text         [not null, default: '']
+  images         text         [not null, default: '']
+  seller_name    varchar(255) [not null, default: '']
+  discord_tag    varchar(128) [not null, default: '']
+  created_at     timestamp    [null]
+  views          integer      [not null, default: 0]
+  status         varchar(32)  [not null, default: 'Pending']
+
+  indexes {
+    legacy_id
+    wallet_address
+    status
+  }
+  Note: 'Service/product listing posted by a wallet.'
+}
+
+Table Talent {
+  id              integer      [pk, increment]
+  name            varchar(255) [not null]
+  role            varchar(255) [not null, default: '']
+  injective_role  varchar(255) [not null, default: '']
+  experience      varchar(255) [not null, default: '']
+  education       varchar(255) [not null, default: '']
+  location        varchar(255) [not null, default: '']
+  availability    varchar(64)  [not null, default: '']
+  monthly_rate    varchar(64)  [not null, default: '']
+  skills          text         [not null, default: '']
+  languages       varchar(255) [not null, default: '']
+  discord         varchar(128) [not null, default: '']
+  email           varchar(255) [not null, default: '']
+  phone           varchar(64)  [not null, default: '']
+  telegram        varchar(128) [not null, default: '']
+  x               varchar(128) [not null, default: '']
+  github          varchar(255) [not null, default: '']
+  wallet_address  varchar(64)  [not null, note: 'wallet']
+  wallet_type     varchar(64)  [not null, default: '']
+  nft_holdings    text         [not null, default: '']
+  token_holdings  text         [not null, default: '']
+  portfolio       varchar(500) [not null, default: '']
+  cv              varchar(500) [not null, default: '']
+  image_url       varchar(500) [not null, default: '']
+  bio             text         [not null, default: '']
+  submission_date timestamp    [null]
+  status          varchar(32)  [not null, default: 'Pending']
+
+  indexes {
+    wallet_address
+    status
+  }
+  Note: 'Talent-directory profile (Excel-column mapped, 26 data fields).'
+}
+
+// ---------------------------------------------------------------------
+// REFERENCE & SECURITY
+// ---------------------------------------------------------------------
+
+Table TokenHolder {
+  id           integer      [pk, increment]
+  address      varchar(255) [unique, not null, note: 'wallet']
+  native_value float        [not null, default: 0]
+  cw20_value   float        [not null, default: 0]
+  total_value  float        [not null, default: 0]
+  percentage   float        [not null, default: 0]
+
+  Note: '$PEDRO holder balances snapshot.'
+}
+
+Table VerifiedToken {
+  id                 integer      [pk, increment]
+  denom              varchar(255) [unique, not null]
+  address            varchar(255) [not null, default: '']
+  is_native          boolean      [not null, default: false]
+  token_verification varchar(64)  [not null, default: '']
+  name               varchar(255) [not null, default: '']
+  decimals           integer      [not null, default: 18]
+  symbol             varchar(64)  [not null, default: '']
+  override_symbol    varchar(64)  [not null, default: '']
+  logo               varchar(500) [not null, default: '']
+  coin_gecko_id      varchar(128) [not null, default: '']
+  token_type         varchar(64)  [not null, default: '']
+  external_logo      varchar(255) [not null, default: '']
+
+  indexes {
+    denom
+    symbol
+    override_symbol
+  }
+  Note: 'Token registry / metadata.'
+}
+
+Table EligibleAddress {
+  id       integer      [pk, increment]
+  address  varchar(64)  [unique, not null, note: 'wallet']
+  note     varchar(255) [not null, default: '']
+  added_at timestamp    [not null, note: 'auto_now_add']
+
+  indexes {
+    address
+  }
+  Note: 'Allow-list of addresses.'
+}
+
+Table ScamWallet {
+  id       integer      [pk, increment]
+  address  varchar(64)  [unique, not null, note: 'wallet']
+  note     varchar(255) [not null, default: '']
+  added_at timestamp    [not null, note: 'auto_now_add']
+
+  indexes {
+    address
+  }
+  Note: 'Block-list of flagged wallets.'
+}
+
+Table ScamReport {
+  id      integer      [pk, increment]
+  address varchar(255) [not null, default: '', note: 'wallet']
+  time    varchar(64)  [not null, default: '']
+  project varchar(255) [not null, default: '']
+  amount  varchar(128) [not null, default: '']
+  info    text         [not null, default: '']
+  group   varchar(100) [not null, default: '']
+
+  indexes {
+    address
+  }
+  Note: 'User-submitted scam reports.'
+}
+
+Table DashboardTxLog {
+  id         integer           [pk, increment]
+  tx_hash    varchar(128)      [unique, not null, note: 'replay guard']
+  feature    dashboard_feature [not null]
+  address    varchar(64)       [not null, note: 'wallet']
+  summary    varchar(255)      [not null, default: '']
+  created_at timestamp         [not null, note: 'auto_now_add']
+
+  indexes {
+    tx_hash
+    feature
+    address
+  }
+  Note: 'Converter / airdrop / launcher transaction log.'
+}
+
+// ---------------------------------------------------------------------
+// TABLE GROUPS (visual clustering in dbdiagram.io)
+// ---------------------------------------------------------------------
+
+TableGroup Game {
+  GameLeaderboardEntry
+  GameUpgradeState
+  GameStealLog
+  GameMonthPayout
+}
+
+TableGroup Raffle {
+  RaffleTicket
+  RaffleFreeClaim
+  RafflePurchase
+  RaffleResult
+}
+
+TableGroup Governance {
+  GovernanceVoterSnapshot
+  GovernanceVote
+  GovernanceMonthResult
+  SpecialProposal
+  SpecialVote
+}
+
+TableGroup Marketplace {
+  MarketplaceListing
+  Talent
+}
+
+TableGroup Reference {
+  TokenHolder
+  VerifiedToken
+  EligibleAddress
+  ScamWallet
+  ScamReport
+  DashboardTxLog
+}
+
+// ---------------------------------------------------------------------
+// SOFT JOINS — NOT real DB foreign keys. These are correlated only in
+// application code by shared string columns. Uncomment to visualise the
+// logical links on the diagram (they will render as relationship lines).
+// ---------------------------------------------------------------------
+
+// -- by wallet address --
+// Ref: GameUpgradeState.address    - GameLeaderboardEntry.address
+// Ref: RaffleTicket.address        - GameUpgradeState.address
+// Ref: GovernanceVote.address      - GameUpgradeState.address
+// Ref: SpecialVote.address         - GameUpgradeState.address
+
+// -- by week (YYYY-Www) --
+// Ref: RaffleTicket.week           - RaffleResult.week
+// Ref: RaffleFreeClaim.week        - RaffleResult.week
+// Ref: RafflePurchase.week         - RaffleResult.week
+
+// -- by month (YYYY-MM) --
+// Ref: GovernanceVote.month        - GovernanceMonthResult.month
+// Ref: GovernanceVoterSnapshot.month - GovernanceMonthResult.month
+// Ref: GameLeaderboardEntry.month  - GameMonthPayout.month

@@ -77,8 +77,11 @@ class GovernanceVerifier:
     def verify_special_vote(tx_hash: str, expected_from: str, proposal_id: int, choice: str) -> tuple[bool, str]:
         if not tx_hash or not expected_from:
             return False, "Missing tx hash or address"
-        if choice not in VALID_SPECIAL_CHOICES:
-            return False, "Invalid choice (allowed: yes, no)"
+        # `choice` is an option index ("0", "1", ...) for multi-option proposals,
+        # or legacy 'yes'/'no'. Range is validated in the view against the
+        # proposal's options; here we only guard the shape.
+        if not (choice.isdigit() or choice in VALID_SPECIAL_CHOICES):
+            return False, "Invalid choice"
 
         url = f"{INJECTIVE_LCD}/cosmos/tx/v1beta1/txs/{tx_hash.upper()}"
         try:

@@ -207,6 +207,11 @@ class GovernanceMonthResult(models.Model):
 class SpecialProposal(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField()
+    # Ordered list of option labels, e.g. ["Add liquidity", "Buy NFTs", "Giveaway"].
+    # A vote's `choice` is the string index into this list ("0", "1", ...).
+    # Legacy yes/no proposals leave this empty and fall back to the two label
+    # fields below (index 0 = yes, index 1 = no) for full backward compatibility.
+    options = models.JSONField(default=list, blank=True)
     choice_yes_label = models.CharField(max_length=64, default='Yes')
     choice_no_label = models.CharField(max_length=64, default='No')
     is_active = models.BooleanField(default=True, db_index=True)
@@ -228,7 +233,8 @@ class SpecialProposal(models.Model):
 class SpecialVote(models.Model):
     proposal = models.ForeignKey(SpecialProposal, on_delete=models.CASCADE, related_name='votes')
     address = models.CharField(max_length=64, db_index=True)
-    choice = models.CharField(max_length=8)  # 'yes' or 'no'
+    # Option index as a string ("0", "1", ...). Legacy rows may hold 'yes'/'no'.
+    choice = models.CharField(max_length=16)
     points = models.IntegerField()
     tx_hash = models.CharField(max_length=128, unique=True, db_index=True)
     voted_at = models.DateTimeField(auto_now_add=True)
