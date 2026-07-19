@@ -12,6 +12,8 @@ PEDRO_DENOM = (
 PEDRO_BURN_ADDRESS = "inj1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqe2hm49"
 PEDRO_DECIMALS = 18
 ONE_PEDRO_WEI = "1" + "0" * PEDRO_DECIMALS
+# 0.1 $PEDRO in wei (1e17). The game charges a tenth of a PEDRO per action.
+TENTH_PEDRO_WEI = "1" + "0" * (PEDRO_DECIMALS - 1)
 INJECTIVE_LCD = "https://sentry.lcd.injective.network"
 MSG_SEND_TYPE = "/cosmos.bank.v1beta1.MsgSend"
 RECAPTCHA_VERIFY_URL = "https://www.google.com/recaptcha/api/siteverify"
@@ -29,14 +31,26 @@ class GameVerifier:
         tx_hash: str,
         expected_from: str,
         expected_amount_pedro: int = 1,
+        expected_amount_wei: str | None = None,
     ) -> tuple[bool, str]:
         """Verifies that `tx_hash` contains a `MsgSend` from `expected_from`
-        to the burn address, transferring exactly `expected_amount_pedro`
-        whole PEDRO. Defaults to 1 to keep existing call sites working."""
+        to the burn address, transferring exactly the expected amount of PEDRO.
+
+        By default the amount is `expected_amount_pedro` whole PEDRO (defaults
+        to 1, keeping existing call sites working). Pass `expected_amount_wei`
+        to require an exact wei amount instead — this allows fractional burns
+        such as 0.1 PEDRO (TENTH_PEDRO_WEI), which the game uses."""
         if not tx_hash or not expected_from:
             return False, "Missing tx hash or address"
-        if expected_amount_pedro < 1:
-            return False, "Expected burn amount must be >= 1"
+
+        if expected_amount_wei is not None:
+            expected_wei = str(expected_amount_wei)
+            amount_label = "$PEDRO"
+        else:
+            if expected_amount_pedro < 1:
+                return False, "Expected burn amount must be >= 1"
+            expected_wei = str(expected_amount_pedro) + "0" * PEDRO_DECIMALS
+            amount_label = f"{expected_amount_pedro} $PEDRO"
 
         url = f"{INJECTIVE_LCD}/cosmos/tx/v1beta1/txs/{tx_hash.upper()}"
         try:
@@ -57,8 +71,6 @@ class GameVerifier:
         if tx_response.get("code", -1) != 0:
             return False, "Tx failed on chain"
 
-        expected_wei = str(expected_amount_pedro) + "0" * PEDRO_DECIMALS
-
         body = (data.get("tx") or {}).get("body") or {}
         for msg in body.get("messages", []):
             if msg.get("@type") != MSG_SEND_TYPE:
@@ -74,7 +86,7 @@ class GameVerifier:
                 ):
                     return True, "OK"
 
-        return False, f"No matching {expected_amount_pedro} $PEDRO burn message in tx"
+        return False, f"No matching {amount_label} burn message in tx"
 
     @staticmethod
     def verify_captcha(token: str, remote_ip: str = "") -> tuple[bool, str]:

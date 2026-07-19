@@ -59,7 +59,7 @@ from .models import (
     RafflePurchase,
     RaffleResult,
 )
-from .injective_game import GameVerifier, INJECTIVE_LCD
+from .injective_game import GameVerifier, INJECTIVE_LCD, TENTH_PEDRO_WEI
 from .injective_governance import GovernanceVerifier, VALID_CHOICES
 from .injective_dashboard_logs import DashboardLogVerifier, FEATURE_MEMOS
 
@@ -965,7 +965,10 @@ def game_submit_score(request):
     if not ok:
         return json_response({'error': f'Captcha failed: {reason}'}, status=400)
 
-    ok, reason = GameVerifier.verify_pedro_burn(tx_hash, address)
+    # The game charges 0.1 $PEDRO per score submission (fractional burn).
+    ok, reason = GameVerifier.verify_pedro_burn(
+        tx_hash, address, expected_amount_wei=TENTH_PEDRO_WEI,
+    )
     if not ok:
         return json_response({'error': f'Burn verification failed: {reason}'}, status=400)
 
@@ -1261,7 +1264,7 @@ def game_steal(request):
     # We shift each existing current-month entry by exactly the stolen amount
     # — NOT by copying the live score, which also holds un-burned clicking
     # gains. We only UPDATE existing rows (never create): getting onto the
-    # board still requires a paid 1 PEDRO burn, which supplies the unique
+    # board still requires a paid 0.1 PEDRO burn, which supplies the unique
     # tx_hash an entry needs. `.update()` on an empty match is a harmless no-op,
     # so a player who never submitted simply isn't affected here.
     GameLeaderboardEntry.objects.filter(
