@@ -1288,6 +1288,44 @@ def game_steal(request):
     })
 
 
+def game_steal_log(request):
+    """Today's steals (UTC), newest first, with player names resolved from each
+    address's locked_name. Powers the game's 'Recent Steals' feed. The payload
+    is capped; the client scrolls and searches within it."""
+    today = datetime.now(timezone.utc).date()
+    entries = list(
+        GameStealLog.objects
+        .filter(created_at__date=today)
+        .order_by('-created_at')[:100]
+    )
+
+    addrs = set()
+    for e in entries:
+        addrs.add(e.attacker)
+        addrs.add(e.target)
+    name_map = dict(
+        GameUpgradeState.objects
+        .filter(address__in=addrs)
+        .values_list('address', 'locked_name')
+    )
+
+    def name_for(addr):
+        return (name_map.get(addr) or '').strip() or f'{addr[:6]}…{addr[-4:]}'
+
+    return json_response({
+        'count': len(entries),
+        'steals': [
+            {
+                'attacker': name_for(e.attacker),
+                'target': name_for(e.target),
+                'amount': e.amount,
+                'created_at': e.created_at.isoformat(),
+            }
+            for e in entries
+        ],
+    })
+
+
 # ---------------------------------------------------------------------------
 # Raffle
 # ---------------------------------------------------------------------------
@@ -2282,7 +2320,92 @@ def dashboard_tx_log(request):
     return json_response({'ok': True})
 
 
+# Activity features whose transactions live in their own models (game score
+# burns, raffle ticket burns, governance votes / proposal-creation burns)
+# rather than in DashboardTxLog. Surfaced in the same shape so the Activity
+# feed can show them alongside converter/airdrop/launcher.
+ONCHAIN_ACTIVITY_FEATURES = {'game', 'raffle', 'governance'}
+
+
+def _onchain_activity_entries(feature):
+    """Recent on-chain transactions for game / raffle / governance, newest
+    first, in the DashboardTxLog entry shape: {tx_hash, address, summary,
+    created_at}. Only rows that actually carry a tx hash are included."""
+    rows = []  # (datetime, entry_dict)
+
+    if feature == 'game':
+        for e in GameLeaderboardEntry.objects.order_by('-submitted_at')[:15]:
+            if not e.tx_hash:
+                continue
+            rows.append((e.submitted_at, {
+                'tx_hash': e.tx_hash,
+                'address': e.address,
+                'summary': f'{e.name} submitted a score of {e.score:,} (burned 0.1 $PEDRO)',
+                'created_at': e.submitted_at.isoformat(),
+            }))
+
+    elif feature == 'raffle':
+        for p in RafflePurchase.objects.order_by('-created_at')[:15]:
+            if not p.tx_hash:
+                continue
+            plural = 's' if p.tickets != 1 else ''
+            rows.append((p.created_at, {
+                'tx_hash': p.tx_hash,
+                'address': p.address,
+                'summary': f'Bought {p.tickets} raffle ticket{plural} (burned {p.pedro_burned:,} $PEDRO)',
+                'created_at': p.created_at.isoformat(),
+            }))
+        for c in RaffleFreeClaim.objects.exclude(tx_hash__isnull=True).order_by('-claimed_at')[:15]:
+            if not c.tx_hash:
+                continue
+            plural = 's' if c.tickets_granted != 1 else ''
+            rows.append((c.claimed_at, {
+                'tx_hash': c.tx_hash,
+                'address': c.address,
+                'summary': f'Claimed {c.tickets_granted} free raffle ticket{plural} (burned 1 $PEDRO)',
+                'created_at': c.claimed_at.isoformat(),
+            }))
+
+    elif feature == 'governance':
+        for v in GovernanceVote.objects.order_by('-voted_at')[:15]:
+            if not v.tx_hash:
+                continue
+            rows.append((v.voted_at, {
+                'tx_hash': v.tx_hash,
+                'address': v.address,
+                'summary': f'Voted "{v.choice}" in monthly governance',
+                'created_at': v.voted_at.isoformat(),
+            }))
+        for sv in SpecialVote.objects.select_related('proposal').order_by('-voted_at')[:15]:
+            if not sv.tx_hash:
+                continue
+            title = sv.proposal.title if sv.proposal_id else 'a proposal'
+            rows.append((sv.voted_at, {
+                'tx_hash': sv.tx_hash,
+                'address': sv.address,
+                'summary': f'Voted on proposal "{title}"',
+                'created_at': sv.voted_at.isoformat(),
+            }))
+        for p in SpecialProposal.objects.exclude(creation_tx_hash='').order_by('-created_at')[:15]:
+            if not p.creation_tx_hash:
+                continue
+            rows.append((p.created_at, {
+                'tx_hash': p.creation_tx_hash,
+                'address': p.creator_address,
+                'summary': f'Created proposal "{p.title}" (burned 10,000 $PEDRO)',
+                'created_at': p.created_at.isoformat(),
+            }))
+
+    rows.sort(key=lambda r: r[0], reverse=True)
+    return [entry for _, entry in rows[:10]]
+
+
 def dashboard_tx_recent(request, feature):
+    if feature in ONCHAIN_ACTIVITY_FEATURES:
+        return json_response({
+            'feature': feature,
+            'entries': _onchain_activity_entries(feature),
+        })
     if feature not in FEATURE_MEMOS:
         return json_response({'error': f"Unknown feature '{feature}'"}, status=400)
     qs = DashboardTxLog.objects.filter(feature=feature).order_by('-created_at')[:10]
