@@ -1355,6 +1355,15 @@ def _ensure_raffle_weeks_finalized(current_week: str) -> None:
     """Lazy weekly draw: for every past ISO week that has tickets but no
     `RaffleResult` row yet, pick a winning ticket and persist it.
 
+    Once a week is drawn its RaffleTicket rows are deleted — the winner and
+    the ticket count live permanently on RaffleResult, so nothing visible is
+    lost and the ticket table (one row PER TICKET) can't grow forever.
+
+    RafflePurchase and RaffleFreeClaim are deliberately NOT deleted: their
+    tx_hash rows are the replay ledger that stops an old burn from being
+    credited again in a later week. They're one row per transaction rather
+    than per ticket, so keeping them costs almost nothing.
+
     Idempotent — a second call is a no-op because the RaffleResult row now
     exists. Mirrors `_ensure_month_rolled_over` for the game.
     """
@@ -1395,6 +1404,18 @@ def _ensure_raffle_weeks_finalized(current_week: str) -> None:
             # Race with another concurrent request that just drew this week.
             # Whichever transaction got there first wins; we silently move on.
             continue
+
+    # Re-query (the loop above may have just created results) and drop the
+    # ticket rows for every past week that is now safely drawn. We filter on
+    # RaffleResult rather than on `past_weeks_with_tickets` directly so a week
+    # whose draw failed keeps its tickets and can still be drawn next time.
+    drawn_weeks = set(
+        RaffleResult.objects
+        .filter(week__in=past_weeks_with_tickets)
+        .values_list('week', flat=True)
+    )
+    if drawn_weeks:
+        RaffleTicket.objects.filter(week__in=drawn_weeks).delete()
 
 
 def _week_bounds_utc(week: str) -> tuple[datetime, datetime]:
